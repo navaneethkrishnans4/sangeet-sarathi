@@ -1,0 +1,45 @@
+.controls {
+    margin-bottom: 3rem;
+    border-bottom: 1px solid var(--marketing-glass-border);
+    padding-bottom: 1rem;
+    display: flex;
+    justify-content: center;
+}
+
+.categories {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.5rem 1.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--marketing-glass-border);
+}
+
+.label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.select {
+    background: transparent;
+    color: var(--accent-gold);
+    border: none;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-right: 1rem;
+    /* Space for arrow if custom */
+}
+
+/* Custom dark mode select styling */
+.select option {
+    background: #111;
+    color: #fff;
+    padding: 10px;
+}
