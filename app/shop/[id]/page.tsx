@@ -16,7 +16,7 @@ export default async function ProductPage({
     }
 
     return (
-        <main className="container" style={{ paddingTop: '8rem', paddingBottom: '4rem' }}>
+        <main className="container" style={{ paddingTop: '8rem', paddingBottom: '4rem', maxWidth: '1200px' }}>
             <Link
                 href="/shop"
                 style={{
@@ -31,7 +31,12 @@ export default async function ProductPage({
                 &larr; Back to Collection
             </Link>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '4rem' }}>
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))',
+                gap: '4rem',
+                alignItems: 'start'
+            }}>
                 {/* Product Image Gallery Section */}
                 <div className="glass-panel" style={{ borderRadius: '8px', overflow: 'hidden', padding: '1rem', background: 'rgba(255,255,255,0.02)' }}>
                     <ImageGallery images={product.images} />
@@ -49,9 +54,22 @@ export default async function ProductPage({
                         Model: #{product.model}
                     </p>
 
-                    <p style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '2rem' }}>
-                        {!product.price.startsWith('₹') && '₹'}{product.price}
-                    </p>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '2rem' }}>
+                        {product.discountPrice && parseFloat(String(product.discountPrice).replace(/[^0-9.]/g, '')) > 0 ? (
+                            <>
+                                <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '1.4rem' }}>
+                                    {!String(product.price).startsWith('₹') && '₹'}{product.price}
+                                </span>
+                                <span style={{ color: 'var(--accent-gold)', fontSize: '2.2rem', fontWeight: '700' }}>
+                                    {!String(product.discountPrice).startsWith('₹') && '₹'}{product.discountPrice}
+                                </span>
+                            </>
+                        ) : (
+                            <span style={{ color: '#fff', fontSize: '2.2rem', fontWeight: '700' }}>
+                                {!String(product.price).startsWith('₹') && '₹'}{product.price}
+                            </span>
+                        )}
+                    </div>
 
                     <div style={{ marginBottom: '2.5rem' }}>
                         <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', fontFamily: 'var(--font-body)' }}>Description</h3>

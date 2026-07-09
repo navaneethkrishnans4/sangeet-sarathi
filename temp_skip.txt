@@ -1,0 +1,12 @@
+const { initializeApp } = require('firebase/app');
+const { getFirestore, collection, getDocs } = require('firebase/firestore');
+
+// Minimal config for verify script (using same as client/lib/firebase.ts if possibly)
+// Since I can't easily import from ts file in node without setup, I'll copy the config structure.
+// Wait, I can't see the config keys. 
+// I should rely on the fact that I can use the existing `lib/firebase.ts` if I run it with `ts-node` or similar, 
+// BUT the user environment might not have ts-node globally. 
+// Easier to just use `curl` to the public shop page or another API route I create to "list products".
+// Actually, I can just create a temporary API route `verify-data` and curl it. That uses the already configured server environment.
+
+// Let's create app/api/verify-data/route.ts

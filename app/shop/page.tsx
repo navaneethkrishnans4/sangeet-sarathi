@@ -7,12 +7,13 @@ import { Suspense } from 'react';
 export default async function ShopPage({
     searchParams,
 }: {
-    searchParams: Promise<{ category?: string; q?: string }>;
+    searchParams: Promise<{ category?: string; q?: string; ai_search_ids?: string }>;
 }) {
     const params = await searchParams;
     const category = params.category || 'all';
     const query = params.q || '';
-    const products = await getProducts(category, query);
+    const aiSearchIds = params.ai_search_ids ? params.ai_search_ids.split(',') : undefined;
+    const products = await getProducts(category, query, aiSearchIds);
 
     return (
         <main className="container" style={{ paddingTop: '8rem', paddingBottom: '4rem' }}>

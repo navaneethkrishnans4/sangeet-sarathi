@@ -12,7 +12,13 @@ export interface Product {
     specs: string[];
     stockStatus: 'in_stock' | 'out_of_stock' | 'on_order';
     visible: boolean;
+    dealer?: string; // Admin only
+    dealerPrice?: string; // Admin only
+    discountPrice?: string; // Visible (Sale price)
+    keywords?: string[]; // Search keywords
 }
+
+import Fuse from "fuse.js";
 
 // Convert Firestore doc to Product type safely
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,7 +42,11 @@ const docToProduct = (doc: any): Product => {
         description: data.description || '',
         specs: data.specs || [],
         stockStatus: data.stockStatus || 'in_stock',
-        visible: data.visible !== false // Default to true if missing
+        visible: data.visible !== false, // Default to true if missing
+        dealer: data.dealer || '',
+        dealerPrice: String(data.dealerPrice || ''),
+        discountPrice: String(data.discountPrice || ''),
+        keywords: Array.isArray(data.keywords) ? data.keywords : []
     };
 };
 
@@ -66,7 +76,7 @@ export async function getProductById(id: string) {
     }
 }
 
-export async function getProducts(category: string, queryText: string) {
+export async function getProducts(category: string, queryText: string, aiSearchIds?: string[]) {
     try {
         const q = collection(db, "products");
         const querySnapshot = await getDocs(q);
@@ -79,12 +89,16 @@ export async function getProducts(category: string, queryText: string) {
             products = products.filter(p => p.category === category);
         }
 
-        if (queryText) {
-            const lowerQuery = queryText.toLowerCase();
-            products = products.filter(p =>
-                p.name.toLowerCase().includes(lowerQuery) ||
-                p.model.toLowerCase().includes(lowerQuery)
-            );
+        if (aiSearchIds && aiSearchIds.length > 0) {
+            products = products.filter(p => aiSearchIds.includes(p.id));
+        } else if (queryText) {
+            const fuse = new Fuse(products, {
+                keys: ['name', 'model', 'keywords'],
+                threshold: 0.4,
+                ignoreLocation: true
+            });
+            const results = fuse.search(queryText);
+            products = results.map(result => result.item);
         }
 
         return products;

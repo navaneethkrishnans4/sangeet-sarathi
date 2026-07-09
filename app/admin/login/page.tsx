@@ -2,20 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function AdminLogin() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Mock login logic
-        if (email === 'admin@sangeet.com' && password === 'admin123') {
-            // Set cookie or local storage in real app
+        setIsLoading(true);
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
             router.push('/admin/dashboard');
-        } else {
-            alert('Invalid credentials');
+        } catch (error) {
+            console.error("Login failed", error);
+            alert('Invalid credentials or authentication failed');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -44,8 +50,8 @@ export default function AdminLogin() {
                             placeholder="admin123"
                         />
                     </div>
-                    <button type="submit" className="btn-primary" style={{ marginTop: '1rem' }}>
-                        Login
+                    <button type="submit" disabled={isLoading} className="btn-primary" style={{ marginTop: '1rem', opacity: isLoading ? 0.7 : 1 }}>
+                        {isLoading ? 'Authenticating...' : 'Login'}
                     </button>
                 </form>
             </div>

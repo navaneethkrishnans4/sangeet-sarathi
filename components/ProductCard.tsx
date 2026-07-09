@@ -43,9 +43,22 @@ export default function ProductCard({ product }: { product: Product }) {
                     </span>
                 </div>
 
-                <p className={styles.price}>
-                    {!String(product.price).startsWith('₹') && '₹'}{product.price}
-                </p>
+                <div className={styles.priceContainer}>
+                    {product.discountPrice && parseFloat(String(product.discountPrice).replace(/[^0-9.]/g, '')) > 0 ? (
+                        <>
+                            <span className={styles.originalPrice}>
+                                {!String(product.price).startsWith('₹') && '₹'}{product.price}
+                            </span>
+                            <span className={styles.salePrice}>
+                                {!String(product.discountPrice).startsWith('₹') && '₹'}{product.discountPrice}
+                            </span>
+                        </>
+                    ) : (
+                        <span className={styles.price}>
+                            {!String(product.price).startsWith('₹') && '₹'}{product.price}
+                        </span>
+                    )}
+                </div>
 
                 <p className={styles.stock} style={{ color: getStatusColor(product.stockStatus) }}>
                     {getStatusText(product.stockStatus)}

@@ -2,6 +2,8 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
+import { getStorage, FirebaseStorage } from "firebase/storage";
+import "firebase/ai"; // Ensure AI is registered with the app
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -16,6 +18,7 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let db: Firestore;
 let auth: Auth;
+let storage: FirebaseStorage;
 
 // Safe initialization
 try {
@@ -36,6 +39,7 @@ try {
     if (firebaseConfig.apiKey) {
         db = getFirestore(app);
         auth = getAuth(app);
+        storage = getStorage(app);
     } else {
         // Return Proxies or Mocks to allow destructuring imports without crashing build
         // This is a minimal mock to satisfy "getFirestore(app)" calls if they were to happen, 
@@ -48,6 +52,7 @@ try {
         // We will export "any" typed proxies that throw friendly errors if used.
         db = {} as Firestore;
         auth = {} as Auth;
+        storage = {} as FirebaseStorage;
     }
 
 } catch (e) {
@@ -55,6 +60,7 @@ try {
     app = {} as FirebaseApp;
     db = {} as Firestore;
     auth = {} as Auth;
+    storage = {} as FirebaseStorage;
 }
 
-export { app, db, auth };
+export { app, db, auth, storage };

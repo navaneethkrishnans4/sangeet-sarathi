@@ -4,7 +4,7 @@ import styles from './CategoryGrid.module.css';
 
 const categories = [
     { id: 'strings', name: 'Strings', image: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?q=80&w=800&auto=format&fit=crop' },
-    { id: 'percussion', name: 'Percussion', image: 'https://images.unsplash.com/photo-1543443436-16d2d437494b?q=80&w=800&auto=format&fit=crop' },
+    { id: 'percussion', name: 'Percussion', image: 'https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?q=80&w=800&auto=format&fit=crop' },
     { id: 'keys', name: 'Keys', image: 'https://images.unsplash.com/photo-1520523839774-a8e64f320131?q=80&w=800&auto=format&fit=crop' },
     { id: 'wind', name: 'Wind', image: 'https://images.unsplash.com/photo-1573871666457-7c7329118cf9?q=80&w=800&auto=format&fit=crop' },
 ];
