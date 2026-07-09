@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import styles from './Hero.module.css';
 import SearchBar from './SearchBar';
+import { Suspense } from 'react';
 
 export default function Hero() {
     return (
@@ -20,7 +21,9 @@ export default function Hero() {
                 </p>
 
                 <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
-                    <SearchBar />
+                    <Suspense fallback={<div>Loading search...</div>}>
+                        <SearchBar />
+                    </Suspense>
                     <div className={styles.actions}>
                         <Link href="/shop" className="btn-primary">
                             Explore Collection
