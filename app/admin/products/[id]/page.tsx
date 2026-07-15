@@ -301,23 +301,36 @@ export default function EditProductPage() {
                     <h2 style={{ fontSize: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>Media Gallery</h2>
                     
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.2)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                             <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Product Images (1st is cover)</span>
-                            <label className="btn-outline" style={{ fontSize: '0.8rem', cursor: 'pointer', opacity: uploadingImage ? 0.5 : 1 }}>
-                                {uploadingImage
-                                    ? (uploadProgress < 50
-                                        ? `Compressing… ${Math.round(uploadProgress * 2)}%`
-                                        : `Uploading… ${Math.round((uploadProgress - 50) * 2)}%`)
-                                    : '+ Upload Images'}
-                                <input 
-                                    type="file" 
-                                    multiple 
-                                    accept="image/*" 
-                                    style={{ display: 'none' }} 
-                                    onChange={handleFileUpload}
-                                    disabled={uploadingImage}
-                                />
-                            </label>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <label className="btn-outline" style={{ fontSize: '0.8rem', cursor: 'pointer', padding: '0.4rem 0.8rem', opacity: uploadingImage ? 0.5 : 1 }}>
+                                    📷 Take Photo
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        capture="environment"
+                                        style={{ display: 'none' }} 
+                                        onChange={handleFileUpload}
+                                        disabled={uploadingImage}
+                                    />
+                                </label>
+                                <label className="btn-outline" style={{ fontSize: '0.8rem', cursor: 'pointer', padding: '0.4rem 0.8rem', opacity: uploadingImage ? 0.5 : 1 }}>
+                                    {uploadingImage
+                                        ? (uploadProgress < 50
+                                            ? `Compressing… ${Math.round(uploadProgress * 2)}%`
+                                            : `Uploading… ${Math.round((uploadProgress - 50) * 2)}%`)
+                                        : '📁 Upload Files'}
+                                    <input 
+                                        type="file" 
+                                        multiple 
+                                        accept="image/*" 
+                                        style={{ display: 'none' }} 
+                                        onChange={handleFileUpload}
+                                        disabled={uploadingImage}
+                                    />
+                                </label>
+                            </div>
                         </div>
                         
                         {images.length === 0 ? (
