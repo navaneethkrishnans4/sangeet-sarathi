@@ -16,7 +16,7 @@ export default async function ProductPage({
     }
 
     return (
-        <main className="container" style={{ paddingTop: '8rem', paddingBottom: '4rem', maxWidth: '1200px' }}>
+        <main className="container" style={{ paddingTop: 'var(--shop-detail-padding-top)', paddingBottom: '4rem', maxWidth: '1200px' }}>
             <Link
                 href="/shop"
                 style={{
@@ -33,8 +33,8 @@ export default async function ProductPage({
 
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))',
-                gap: '4rem',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))',
+                gap: 'var(--shop-detail-gap)',
                 alignItems: 'start'
             }}>
                 {/* Product Image Gallery Section */}
@@ -48,7 +48,7 @@ export default async function ProductPage({
                         {product.category}
                     </span>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                        <h1 style={{ fontSize: '3rem', lineHeight: '1.1', margin: 0 }}>{product.name}</h1>
+                        <h1 style={{ fontSize: 'var(--product-title-size)', lineHeight: '1.1', margin: 0 }}>{product.name}</h1>
                     </div>
                     <p style={{ fontSize: '1rem', color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: '1rem' }}>
                         Model: #{product.model}

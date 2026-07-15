@@ -17,11 +17,15 @@
   
   --font-heading: 'Playfair Display', serif;
   --font-body: 'Outfit', sans-serif;
-  
   --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-fast: 0.2s ease-out;
   
   --spacing-container: 1440px;
+
+  /* Responsive variables for shop detail page */
+  --shop-detail-padding-top: 8rem;
+  --shop-detail-gap: 4rem;
+  --product-title-size: 3rem;
 }
 
 * {
@@ -124,4 +128,15 @@ a:hover {
 
 .animate-float {
   animation: float 6s ease-in-out infinite;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 1rem;
+  }
+  :root {
+    --shop-detail-padding-top: 6rem;
+    --shop-detail-gap: 2rem;
+    --product-title-size: 2rem;
+  }
 }
