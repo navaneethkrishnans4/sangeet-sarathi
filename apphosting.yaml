@@ -1,5 +1,6 @@
 # Firebase App Hosting Configuration
 # https://firebase.google.com/docs/app-hosting/configure
+# Deployed: 2026-10-23
 
 runConfig:
   cpu: 1
