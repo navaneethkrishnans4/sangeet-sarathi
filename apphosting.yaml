@@ -7,3 +7,7 @@ runConfig:
   minInstances: 0
   maxInstances: 10
   concurrency: 80
+
+env:
+  - variable: GOOGLE_NODEJS_VERSION
+    value: "22.x"
