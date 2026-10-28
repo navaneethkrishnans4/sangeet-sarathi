@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./trinity.css";
 
-const inter = Inter({
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Trinity Master Dashboard | Sangeet Sarathi",
-  description: "Central hub for candidate enrolments, reconciliation, and financial insights.",
+  title: "Trinity Master Dashboard",
+  description: "Central hub for enrolments, reconciliation, and financial insights.",
 };
 
 export default function TrinityLayout({
@@ -19,7 +23,7 @@ export default function TrinityLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${inter.className} ${inter.variable} trinity-scope min-h-screen bg-slate-900 text-white font-sans antialiased`}>
+    <div className={`${geistSans.variable} ${geistMono.variable} font-sans trinity-scope min-h-screen bg-slate-900 text-white antialiased`}>
       {children}
     </div>
   );

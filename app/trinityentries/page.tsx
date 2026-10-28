@@ -4,41 +4,25 @@ import {
   ArrowRightLeft, 
   BookOpen, 
   TrendingUp, 
-  Database,
-  Bot,
-  ArrowLeft
+  Database
 } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-10 flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-10 flex flex-col items-center justify-center">
       
-      {/* Top Header Navigation */}
-      <div className="max-w-5xl w-full flex items-center justify-between mb-8">
-        <Link 
-          href="/" 
-          className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors bg-slate-800/50 hover:bg-slate-700/50 px-4 py-2 rounded-xl border border-slate-700/50"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Sangeet Sarathi Store
-        </Link>
-        <span className="text-xs uppercase tracking-widest text-slate-400 font-semibold bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700/50">
-          Center 4048
-        </span>
-      </div>
-
       {/* Header Section */}
-      <div className="max-w-4xl w-full text-center mb-14 space-y-3">
-        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+      <div className="max-w-4xl w-full text-center mb-16 space-y-4">
+        <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
           Trinity Master Dashboard
         </h1>
-        <p className="text-slate-400 text-base sm:text-lg">
-          Central hub for candidate enrolments, reconciliation, and financial insights.
+        <p className="text-slate-400 text-lg">
+          Central hub for enrolments, reconciliation, and financial insights.
         </p>
       </div>
 
       {/* Main Navigation Grid */}
-      <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+      <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         
         {/* Fill Entries Card */}
         <Link href="/trinityentries/entries" className="group">
@@ -79,32 +63,6 @@ export default function Home() {
           </div>
         </Link>
 
-        {/* AI Assistant Card */}
-        <Link href="/trinityentries/chat" className="group">
-          <div className="h-full bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-3xl p-8 hover:bg-slate-700/50 hover:border-purple-500/50 transition-all duration-300 shadow-xl hover:shadow-purple-500/10 cursor-pointer flex flex-col">
-            <div className="bg-purple-500/20 p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
-              <Bot className="w-8 h-8 text-purple-400" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">AI Database Assistant</h2>
-            <p className="text-slate-400 flex-grow">
-              Ask natural language questions to query candidates, transactions, and audit records with Gemini.
-            </p>
-          </div>
-        </Link>
-
-        {/* Database Viewer Card */}
-        <Link href="/trinityentries/database" className="group">
-          <div className="h-full bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-3xl p-8 hover:bg-slate-700/50 hover:border-rose-500/50 transition-all duration-300 shadow-xl hover:shadow-rose-500/10 cursor-pointer flex flex-col">
-            <div className="bg-rose-500/20 p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
-              <Database className="w-8 h-8 text-rose-400" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Database Viewer</h2>
-            <p className="text-slate-400 flex-grow">
-              Directly view raw data inside all your database tables with real-time filters and search.
-            </p>
-          </div>
-        </Link>
-
         {/* Monthly Income Card */}
         <div className="group cursor-not-allowed opacity-60">
           <div className="h-full bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-3xl p-8 transition-all duration-300 shadow-xl flex flex-col">
@@ -117,6 +75,19 @@ export default function Home() {
             </p>
           </div>
         </div>
+
+        {/* Database Viewer Card */}
+        <Link href="/trinityentries/database" className="group">
+          <div className="h-full bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-3xl p-8 hover:bg-slate-700/50 hover:border-rose-500/50 transition-all duration-300 shadow-xl hover:shadow-rose-500/10 cursor-pointer flex flex-col">
+            <div className="bg-rose-500/20 p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
+              <Database className="w-8 h-8 text-rose-400" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Database Viewer</h2>
+            <p className="text-slate-400 flex-grow">
+              Directly view raw data inside all your database tables. Faster and more reliable than Prisma Studio!
+            </p>
+          </div>
+        </Link>
 
       </div>
     </div>
