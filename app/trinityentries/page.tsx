@@ -3,7 +3,7 @@ import {
   FilePlus, 
   ArrowRightLeft, 
   BookOpen, 
-  TrendingUp, 
+  FileSpreadsheet, 
   Database
 } from "lucide-react";
 
@@ -63,18 +63,18 @@ export default function Home() {
           </div>
         </Link>
 
-        {/* Monthly Income Card */}
-        <div className="group cursor-not-allowed opacity-60">
-          <div className="h-full bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-3xl p-8 transition-all duration-300 shadow-xl flex flex-col">
-            <div className="bg-amber-500/20 p-4 rounded-2xl w-fit mb-6">
-              <TrendingUp className="w-8 h-8 text-amber-400" />
+        {/* Master Enrolment Processor Card */}
+        <Link href="/trinityentries/master-enrollment" className="group">
+          <div className="h-full bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-3xl p-8 hover:bg-slate-700/50 hover:border-teal-500/50 transition-all duration-300 shadow-xl hover:shadow-teal-500/10 cursor-pointer flex flex-col">
+            <div className="bg-teal-500/20 p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
+              <FileSpreadsheet className="w-8 h-8 text-teal-400" />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Monthly Income</h2>
+            <h2 className="text-2xl font-bold mb-2">Master Enrolment</h2>
             <p className="text-slate-400 flex-grow">
-              Analytics and graphs for overall income and fee remission. <span className="text-amber-400 text-sm font-semibold ml-1">(Coming Soon)</span>
+              Upload Trinity Mass Enrolment Sheets (Music & Rock/Pop) to auto-assign Order Numbers, months, and reconcile fees.
             </p>
           </div>
-        </div>
+        </Link>
 
         {/* Database Viewer Card */}
         <Link href="/trinityentries/database" className="group">

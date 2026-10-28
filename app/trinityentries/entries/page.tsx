@@ -189,6 +189,11 @@ export default function EntriesPortal() {
             </div>
           </div>
 
+          <Link href="/trinityentries/master-enrollment" className="flex items-center gap-2 text-teal-300 hover:text-white transition-colors bg-teal-500/20 hover:bg-teal-500/30 px-4 py-2.5 rounded-xl border border-teal-500/40 text-sm font-semibold shadow-md">
+            <FileSpreadsheet className="w-4 h-4" />
+            Master Sheet Processor
+          </Link>
+
           <Link href="/trinityentries" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors bg-slate-800/50 px-4 py-2.5 rounded-xl border border-slate-700/50 hover:border-slate-500 text-sm font-medium">
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
