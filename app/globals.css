@@ -30,10 +30,14 @@
   --product-title-size: 3rem;
 }
 
-* {
+@layer base {
+  *, ::before, ::after {
+    box-sizing: border-box;
+  }
+}
+
+.store-scope * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 body {
