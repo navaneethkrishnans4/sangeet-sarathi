@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./trinity.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Trinity Master Dashboard | Sangeet Sarathi",
-  description: "Central hub for Trinity College London exam enrolments, reconciliation, and ledger.",
+  description: "Central hub for candidate enrolments, reconciliation, and financial insights.",
 };
 
 export default function TrinityLayout({
@@ -12,7 +19,7 @@ export default function TrinityLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-slate-900 text-white font-sans antialiased">
+    <div className={`${inter.className} ${inter.variable} trinity-scope min-h-screen bg-slate-900 text-white font-sans antialiased`}>
       {children}
     </div>
   );

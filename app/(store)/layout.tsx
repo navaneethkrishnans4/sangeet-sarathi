@@ -7,10 +7,12 @@ export default function StoreLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <div className="store-scope min-h-screen flex flex-col">
       <Navbar />
-      {children}
+      <div className="flex-grow">
+        {children}
+      </div>
       <Footer />
-    </>
+    </div>
   );
 }

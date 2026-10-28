@@ -41,20 +41,19 @@ body {
   overflow-x: hidden;
 }
 
-h1, h2, h3, h4, h5, h6 {
+.store-scope h1, .store-scope h2, .store-scope h3, .store-scope h4, .store-scope h5, .store-scope h6 {
   font-family: var(--font-heading);
   font-weight: 700;
   line-height: 1.1;
   color: var(--text-primary);
 }
 
-a {
+.store-scope a {
   color: inherit;
   text-decoration: none;
   transition: opacity var(--transition-fast);
 }
-
-a:hover {
+.store-scope a:hover {
   opacity: 0.8;
 }
 

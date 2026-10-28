@@ -1,1 +1,39 @@
 @import "tailwindcss";
+
+/* Force Inter and modern sans-serif across all elements in Trinity */
+.trinity-scope,
+.trinity-scope * {
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+/* Ensure headings have crisp sans-serif with tight tracking and inherit clean colors */
+.trinity-scope h1,
+.trinity-scope h2,
+.trinity-scope h3,
+.trinity-scope h4,
+.trinity-scope h5,
+.trinity-scope h6 {
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  color: inherit;
+  line-height: 1.25;
+}
+
+/* Restore gradient text utilities with highest priority */
+.trinity-scope .bg-clip-text {
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+}
+
+.trinity-scope .text-transparent {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* Fix link hover behavior */
+.trinity-scope a {
+  text-decoration: none;
+}
+
+.trinity-scope a:hover {
+  opacity: 1;
+}
