@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   /* Premium Color Palette */
   --marketing-black: #0a0a0a;

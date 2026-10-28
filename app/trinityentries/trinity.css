@@ -1,24 +1,10 @@
-@import "tailwindcss";
-
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-.trinity-scope {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
-}
-
-.trinity-scope h1,
-.trinity-scope h2,
-.trinity-scope h3,
-.trinity-scope h4,
-.trinity-scope h5,
-.trinity-scope h6,
-.trinity-scope p,
-.trinity-scope span,
-.trinity-scope a,
-.trinity-scope div {
+.trinity-scope, 
+.trinity-scope * {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
 }
 
@@ -30,8 +16,4 @@
 .trinity-scope .text-transparent {
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
-}
-
-.trinity-scope a {
-  text-decoration: none;
 }
