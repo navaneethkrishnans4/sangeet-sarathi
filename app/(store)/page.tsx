@@ -1,5 +1,5 @@
-import Hero from '../components/Hero';
-import CategoryGrid from '../components/CategoryGrid';
+import Hero from '@/components/Hero';
+import CategoryGrid from '@/components/CategoryGrid';
 import Link from 'next/link';
 
 export default function Home() {

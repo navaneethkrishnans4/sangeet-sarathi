@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Data engine credentials and cache
+data_engine/*.json
+data_engine/__pycache__/

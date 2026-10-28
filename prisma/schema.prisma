@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model OrderNumber {
+  id             String    @id @default(uuid())
+  orderNumber    String    @unique
+  centerNumber   String    @default("4048")
+  city           String?
+  academyName    String?
+  examType       String?  // e.g. 'Classical & Jazz', 'Rock & Pop'
+  examMode       String?  @default("Digital") // 'Digital', 'Face-to-Face'?
+  
+  candidates     Candidate[]
+  
+  createdAt      DateTime  @default(now())
+}
+
+model TeacherAcademy {
+  id             String    @id @default(uuid())
+  uniqueKey      String    @unique
+  name           String    
+  teacherName    String?
+  schoolName     String?
+  primary_email  String?
+  phone          String?
+  type           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  candidates         Candidate[]
+  transactions       BankTransaction[]
+  tempTransactions   TempBankTransaction[]
+  aliases            TeacherAlias[]
+}
+
+model TeacherAlias {
+  id               String         @id @default(uuid())
+  alias            String         @unique
+  teacherId        String
+  teacher          TeacherAcademy @relation(fields: [teacherId], references: [id])
+}
+
+model Candidate {
+  id             String    @id @default(uuid())
+  firstName      String
+  lastName       String
+  examType       String
+  grade          String
+  instrument     String
+  expectedFee    Float
+  paymentStatus  String    @default("Pending") // 'Pending', 'Reconciled'
+  status         String    @default("Active") // 'Active', 'Archived'
+  sessionMonth   String?   // e.g. 'July', 'August'
+  
+  teacherId      String?
+  teacher        TeacherAcademy? @relation(fields: [teacherId], references: [id])
+  
+  orderNumberId  String?
+  orderNumber    OrderNumber? @relation(fields: [orderNumberId], references: [id])
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model BankTransaction {
+  id                  String    @id @default(uuid())
+  transactionDate     DateTime
+  narration           String    @unique
+  amount              Float
+  reconciledMethod    String?   // e.g., 'Pass 1: Alias', 'Pass 2: Dynamic Candidate Match'
+  
+  reconciledTeacherId String?
+  reconciledTeacher   TeacherAcademy? @relation(fields: [reconciledTeacherId], references: [id])
+  status              String    @default("Pending") // 'Pending', 'Matched', 'Mismatch'
+  sessionMonth        String?   // e.g. 'July', 'August'
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model TempBankTransaction {
+  id                  String          @id @default(uuid())
+  transactionDate     DateTime?
+  narration           String
+  amount              Float
+  mappedTeacherId     String?
+  mappedTeacher       TeacherAcademy? @relation(fields: [mappedTeacherId], references: [id])
+  matchMethod         String?         // 'Pass 1: Alias', 'Pass 2: Amount Match', 'Manual Override'
+  isRuleSaved         Boolean         @default(false)
+  status              String          @default("Pending") // 'Pending', 'Matched', 'Mismatch'
+  sessionMonth        String?         // e.g. 'July', 'August'
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  tableName   String
+  recordId    String
+  oldValue    String?
+  newValue    String?
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model NotYetPaid {
+  id            String   @id @default(uuid())
+  candidateName String
+  subject       String
+  grade         String
+  amount        Float
+  teacherId     String
+  teacherName   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
