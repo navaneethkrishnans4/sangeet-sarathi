@@ -5,7 +5,17 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
-export const maxDuration = 120; // Allow sufficient execution window
+export const maxDuration = 120;
+
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool({ 
+  connectionString,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+});
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 const GENERIC_EMAILS = ["trinitykochi.ops.office@gmail.com"];
 
@@ -109,11 +119,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "No Excel file uploaded" }, { status: 400 });
     }
 
-    const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
       return NextResponse.json({
         success: false,
-        error: "DATABASE_URL environment variable is missing on this server. Please configure it in your environment settings."
+        error: "DATABASE_URL is not configured in the server environment."
       }, { status: 500 });
     }
 
@@ -168,201 +177,238 @@ export async function POST(req: Request) {
       sections.push({ rowIndex: 0, orderNumber: "UNKNOWN-ORDER", month: defaultMonth });
     }
 
-    // Initialize Prisma Client
-    const pool = new Pool({ connectionString });
-    const adapter = new PrismaPg(pool);
-    const prisma = new PrismaClient({ adapter });
+    // 2. Fetch existing database records in ONE fast parallel batch query
+    const [existingCandidates, existingTeachers, existingOrders] = await Promise.all([
+      prisma.candidate.findMany({
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          grade: true,
+          instrument: true,
+          orderNumberId: true,
+          sessionMonth: true,
+          paymentStatus: true
+        }
+      }),
+      prisma.teacherAcademy.findMany({
+        select: {
+          id: true,
+          uniqueKey: true,
+          name: true
+        }
+      }),
+      prisma.orderNumber.findMany({
+        select: {
+          id: true,
+          orderNumber: true
+        }
+      })
+    ]);
+
+    // Build fast in-memory lookup maps
+    const orderMap = new Map<string, string>();
+    for (const o of existingOrders) {
+      orderMap.set(o.orderNumber, o.id);
+    }
+
+    const teacherMap = new Map<string, string>();
+    for (const t of existingTeachers) {
+      teacherMap.set(t.uniqueKey.toLowerCase(), t.id);
+      teacherMap.set(t.name.toLowerCase(), t.id);
+    }
+
+    const candidateMap = new Map<string, any>();
+    for (const c of existingCandidates) {
+      const key = `${c.firstName}_${c.lastName}_${c.grade}_${c.instrument}`.toLowerCase();
+      candidateMap.set(key, c);
+      candidateMap.set(c.id, c);
+    }
+
+    // 3. Ensure OrderNumbers exist
+    const ordersDetected = new Set<string>();
+    for (const s of sections) {
+      ordersDetected.add(s.orderNumber);
+      if (!dryRun && !orderMap.has(s.orderNumber)) {
+        const newOrder = await prisma.orderNumber.create({
+          data: {
+            orderNumber: s.orderNumber,
+            centerNumber: "4048",
+            examType: suite,
+            examMode: "Digital"
+          }
+        });
+        orderMap.set(s.orderNumber, newOrder.id);
+      }
+    }
 
     let totalRowsChecked = 0;
     let newCandidatesEnrolled = 0;
     let existingUpdated = 0;
     let totalFeeAmount = 0;
-    const ordersDetected = new Set<string>();
 
-    try {
-      for (let i = 0; i < sections.length; i++) {
-        const currentSection = sections[i];
-        const nextSection = sections[i + 1];
-        const startRow = currentSection.rowIndex + 1;
-        const endRow = nextSection ? nextSection.rowIndex : rows.length;
-        const orderNumber = currentSection.orderNumber;
-        const sectionMonth = currentSection.month;
+    const candidatesToInsert: any[] = [];
+    const candidatesToUpdate: { id: string; orderNumberId: string; sessionMonth: string; expectedFee: number; teacherId: string }[] = [];
+    const bankTxsToInsert: any[] = [];
 
-        ordersDetected.add(orderNumber);
+    // 4. Parse rows in-memory
+    for (let i = 0; i < sections.length; i++) {
+      const currentSection = sections[i];
+      const nextSection = sections[i + 1];
+      const startRow = currentSection.rowIndex + 1;
+      const endRow = nextSection ? nextSection.rowIndex : rows.length;
+      const orderNumber = currentSection.orderNumber;
+      const sectionMonth = currentSection.month;
+      const orderDbId = orderMap.get(orderNumber) || null;
 
-        // Resolve or create OrderNumber in DB
-        let orderDbId: string | null = null;
-        if (!dryRun) {
-          let existingOrder = await prisma.orderNumber.findUnique({
-            where: { orderNumber }
-          });
-          if (!existingOrder) {
-            existingOrder = await prisma.orderNumber.create({
-              data: {
-                orderNumber,
-                centerNumber: "4048",
-                examType: suite,
-                examMode: "Digital"
-              }
-            });
-          }
-          orderDbId = existingOrder.id;
+      for (let r = startRow; r < endRow; r++) {
+        const row = rows[r];
+        if (!row || row.length === 0) continue;
+
+        const firstName = String(row[1] || "").trim();
+        const lastName = String(row[3] || "").trim();
+        const grade = String(row[14] || "").trim();
+        const instrument = String(row[15] || "").trim();
+
+        if (!firstName || ["#", "First Name", "Leave Blank", "Aug", "Sep", "Oct", "Jul"].includes(firstName) || firstName.startsWith("Order") || !grade) {
+          continue;
         }
 
-        for (let r = startRow; r < endRow; r++) {
-          const row = rows[r];
-          if (!row || row.length === 0) continue;
+        totalRowsChecked++;
 
-          const firstName = String(row[1] || "").trim();
-          const lastName = String(row[3] || "").trim();
-          const grade = String(row[14] || "").trim();
-          const instrument = String(row[15] || "").trim();
+        const subEmail = String(row[20] || row[5] || "").trim();
+        const candEmail = String(row[5] || "").trim();
+        const applicant = String(row[25] || "").trim();
+        const school = String(row[27] || "").trim();
+        const submitterFn = String(row[18] || "").trim();
+        const submitterLn = String(row[19] || "").trim();
+        const submitter = `${submitterFn} ${submitterLn}`.trim();
 
-          if (!firstName || ["#", "First Name", "Leave Blank", "Aug", "Sep", "Oct", "Jul"].includes(firstName) || firstName.startsWith("Order") || !grade) {
-            continue;
-          }
+        // Extract fee from column 38 (index 37) or adjacent
+        let fee = 0;
+        const rawFee = row[37] !== "" ? row[37] : (row[38] !== "" ? row[38] : row[36]);
+        if (rawFee !== undefined && rawFee !== null && rawFee !== "") {
+          const parsed = parseFloat(String(rawFee).replace(/,/g, ""));
+          if (!isNaN(parsed)) fee = parsed;
+        }
+        totalFeeAmount += fee;
 
-          totalRowsChecked++;
+        // Resolve teacher in-memory
+        const { key: teacherKey, name: teacherName } = getTeacherKeyAndName(applicant, submitter, school, subEmail, candEmail);
+        let teacherId = teacherMap.get(teacherKey.toLowerCase()) || teacherMap.get(teacherName.toLowerCase());
 
-          const subEmail = String(row[20] || row[5] || "").trim();
-          const candEmail = String(row[5] || "").trim();
-          const applicant = String(row[25] || "").trim();
-          const school = String(row[27] || "").trim();
-          const submitterFn = String(row[18] || "").trim();
-          const submitterLn = String(row[19] || "").trim();
-          const submitter = `${submitterFn} ${submitterLn}`.trim();
-
-          // Extract fee from column 38 (index 37) or adjacent
-          let fee = 0;
-          const rawFee = row[37] !== "" ? row[37] : (row[38] !== "" ? row[38] : row[36]);
-          if (rawFee !== undefined && rawFee !== null && rawFee !== "") {
-            const parsed = parseFloat(String(rawFee).replace(/,/g, ""));
-            if (!isNaN(parsed)) fee = parsed;
-          }
-          totalFeeAmount += fee;
-
-          if (dryRun) {
-            // For preview only, check if candidate exists
-            const existing = await prisma.candidate.findFirst({
-              where: {
-                firstName: { equals: firstName, mode: "insensitive" },
-                lastName: { equals: lastName, mode: "insensitive" },
-                grade: { equals: grade, mode: "insensitive" },
-                instrument: { equals: instrument, mode: "insensitive" }
-              }
-            });
-            if (existing) {
-              existingUpdated++;
-            } else {
-              newCandidatesEnrolled++;
-            }
-            continue;
-          }
-
-          // 1. Resolve TeacherAcademy
-          const { key: teacherKey, name: teacherName } = getTeacherKeyAndName(applicant, submitter, school, subEmail, candEmail);
+        if (!teacherId && !dryRun) {
           const truePrimaryEmail = (subEmail && subEmail.toLowerCase() !== "none") ? subEmail : null;
           const displayTeacherName = submitter || applicant || "Unknown";
-
-          let teacher = await prisma.teacherAcademy.findFirst({
-            where: {
-              OR: [
-                { uniqueKey: { equals: teacherKey, mode: "insensitive" } },
-                { name: { equals: teacherName, mode: "insensitive" } }
-              ]
+          const newTeacher = await prisma.teacherAcademy.create({
+            data: {
+              uniqueKey: teacherKey,
+              name: teacherName,
+              teacherName: displayTeacherName,
+              schoolName: school || null,
+              primary_email: truePrimaryEmail
             }
           });
+          teacherId = newTeacher.id;
+          teacherMap.set(teacherKey.toLowerCase(), teacherId);
+          teacherMap.set(teacherName.toLowerCase(), teacherId);
+        }
 
-          if (!teacher) {
-            teacher = await prisma.teacherAcademy.create({
-              data: {
-                uniqueKey: teacherKey,
-                name: teacherName,
-                teacherName: displayTeacherName,
-                schoolName: school || null,
-                primary_email: truePrimaryEmail
-              }
+        // Check if candidate already exists in memory
+        const candDeterministicId = generateUuid(`${firstName}-${lastName}-${suite}-${grade}-${instrument}`.toLowerCase());
+        const candMatchKey = `${firstName}_${lastName}_${grade}_${instrument}`.toLowerCase();
+        const existingCand = candidateMap.get(candMatchKey) || candidateMap.get(candDeterministicId);
+
+        if (existingCand) {
+          existingUpdated++;
+          if (!dryRun && orderDbId && teacherId) {
+            candidatesToUpdate.push({
+              id: existingCand.id,
+              orderNumberId: orderDbId,
+              sessionMonth: sectionMonth,
+              expectedFee: fee,
+              teacherId
             });
+            // Update in-memory record
+            existingCand.orderNumberId = orderDbId;
+            existingCand.sessionMonth = sectionMonth;
+            existingCand.expectedFee = fee;
+            existingCand.paymentStatus = "Reconciled";
           }
-
-          // 2. Resolve Candidate
-          const candDeterministicId = generateUuid(`${firstName}-${lastName}-${suite}-${grade}-${instrument}`.toLowerCase());
-
-          const existingCandidate = await prisma.candidate.findFirst({
-            where: {
-              OR: [
-                { id: candDeterministicId },
-                {
-                  firstName: { equals: firstName, mode: "insensitive" },
-                  lastName: { equals: lastName, mode: "insensitive" },
-                  grade: { equals: grade, mode: "insensitive" },
-                  instrument: { equals: instrument, mode: "insensitive" }
-                }
-              ]
-            }
-          });
-
-          let targetCandId: string;
-
-          if (existingCandidate) {
-            targetCandId = existingCandidate.id;
-            await prisma.candidate.update({
-              where: { id: existingCandidate.id },
-              data: {
-                orderNumberId: orderDbId,
-                sessionMonth: sectionMonth,
-                expectedFee: fee,
-                paymentStatus: "Reconciled",
-                teacherId: teacher.id,
-                updatedAt: new Date()
-              }
+        } else {
+          newCandidatesEnrolled++;
+          if (!dryRun && orderDbId && teacherId) {
+            candidatesToInsert.push({
+              id: candDeterministicId,
+              firstName,
+              lastName,
+              examType: suite,
+              grade,
+              instrument,
+              expectedFee: fee,
+              paymentStatus: "Reconciled",
+              status: "Active",
+              sessionMonth: sectionMonth,
+              teacherId,
+              orderNumberId: orderDbId
             });
-            existingUpdated++;
-          } else {
-            targetCandId = candDeterministicId;
-            await prisma.candidate.create({
-              data: {
-                id: candDeterministicId,
-                firstName,
-                lastName,
-                examType: suite,
-                grade,
-                instrument,
-                expectedFee: fee,
-                paymentStatus: "Reconciled",
-                status: "Active",
-                sessionMonth: sectionMonth,
-                teacherId: teacher.id,
-                orderNumberId: orderDbId
-              }
-            });
-            newCandidatesEnrolled++;
-          }
 
-          // 3. Upsert BankTransaction matching record
-          const narrationTag = `Master Enrollment Paid: ${firstName} ${lastName} (${targetCandId})`;
-          const existingTx = await prisma.bankTransaction.findFirst({
-            where: { narration: narrationTag }
-          });
-
-          if (!existingTx) {
-            await prisma.bankTransaction.create({
-              data: {
-                transactionDate: new Date(),
-                narration: narrationTag,
-                amount: fee,
-                reconciledMethod: "Master Enrollment Paid",
-                reconciledTeacherId: teacher.id,
-                status: "Matched",
-                sessionMonth: sectionMonth
-              }
+            bankTxsToInsert.push({
+              transactionDate: new Date(),
+              narration: `Master Enrollment Paid: ${firstName} ${lastName} (${candDeterministicId})`,
+              amount: fee,
+              reconciledMethod: "Master Enrollment Paid",
+              reconciledTeacherId: teacherId,
+              status: "Matched",
+              sessionMonth: sectionMonth
             });
+
+            // Add to in-memory map so duplicate rows in same file are caught
+            candidateMap.set(candMatchKey, { id: candDeterministicId });
+            candidateMap.set(candDeterministicId, { id: candDeterministicId });
           }
         }
       }
-    } finally {
-      await prisma.$disconnect();
-      await pool.end();
+    }
+
+    // 5. Commit batch updates & inserts efficiently
+    if (!dryRun) {
+      // Insert new candidates in bulk
+      if (candidatesToInsert.length > 0) {
+        await prisma.candidate.createMany({
+          data: candidatesToInsert,
+          skipDuplicates: true
+        });
+      }
+
+      // Insert matching bank transactions in bulk
+      if (bankTxsToInsert.length > 0) {
+        await prisma.bankTransaction.createMany({
+          data: bankTxsToInsert,
+          skipDuplicates: true
+        });
+      }
+
+      // Update existing candidates in parallel chunks
+      const updateChunks = 25;
+      for (let i = 0; i < candidatesToUpdate.length; i += updateChunks) {
+        const chunk = candidatesToUpdate.slice(i, i + updateChunks);
+        await Promise.all(
+          chunk.map(c =>
+            prisma.candidate.update({
+              where: { id: c.id },
+              data: {
+                orderNumberId: c.orderNumberId,
+                sessionMonth: c.sessionMonth,
+                expectedFee: c.expectedFee,
+                paymentStatus: "Reconciled",
+                teacherId: c.teacherId,
+                updatedAt: new Date()
+              }
+            })
+          )
+        );
+      }
     }
 
     return NextResponse.json({
