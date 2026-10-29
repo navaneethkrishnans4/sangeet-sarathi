@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+
+# excel spreadsheets & scratch files
+*.xlsx
+*.xls
+.gemini/
+.windsurf/
+.claude/
+.agents/
+.convert_state.json
+test_gemini.js
+remove_immanuel.py
+data_engine/*.json
+data_engine/__pycache__/
