@@ -13,7 +13,12 @@ export async function GET() {
     const teachers = await prisma.teacherAcademy.findMany({
       include: {
         candidates: {
-          where: { status: "Active" }
+          where: { status: "Active" },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
         },
         transactions: true
       },
@@ -23,13 +28,15 @@ export async function GET() {
     const ledger = teachers.map((teacher) => {
       const candidateCount = teacher.candidates.length;
       const amountPaid = teacher.transactions.reduce((sum, tx) => sum + tx.amount, 0);
+      const studentNames = teacher.candidates.map(c => `${c.firstName} ${c.lastName || ""}`.trim());
 
       return {
         id: teacher.id,
         teacherName: teacher.teacherName || teacher.name,
         academyName: teacher.schoolName || "No Academy Name",
         candidateCount,
-        amountPaid
+        amountPaid,
+        studentNames
       };
     });
 

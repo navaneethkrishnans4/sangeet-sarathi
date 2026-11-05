@@ -9,7 +9,11 @@ import {
   CheckCircle2, 
   X,
   UserPlus,
-  ListChecks
+  ListChecks,
+  Sliders,
+  Maximize2,
+  Minimize2,
+  Ban
 } from "lucide-react";
 import Link from "next/link";
 
@@ -23,6 +27,7 @@ interface TempTransaction {
   mappedSchoolName: string;
   matchMethod: string;
   isRuleSaved: boolean;
+  sessionMonth?: string;
 }
 
 interface TeacherOption {
@@ -45,6 +50,7 @@ interface Candidate {
   teacherName: string;
   schoolName: string;
   paymentStatus: string;
+  sessionMonth?: string;
 }
 
 export default function TransactionMappingPage() {
@@ -59,7 +65,19 @@ export default function TransactionMappingPage() {
   const [selectedToIgnore, setSelectedToIgnore] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<"desc" | "asc" | "none">("none");
   const [dataSource, setDataSource] = useState<"temp" | "main">("temp");
-  const [selectedMonth, setSelectedMonth] = useState<string>("August");
+  const [selectedMonth, setSelectedMonth] = useState<string>("All");
+  const [narrationWidth, setNarrationWidth] = useState<number>(450);
+  const [wrapNarration, setWrapNarration] = useState<boolean>(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRowExpand = (id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchMappingData();
@@ -194,7 +212,7 @@ export default function TransactionMappingPage() {
 
   const handleIgnoreSelected = async () => {
     if (selectedToIgnore.size === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedToIgnore.size} junk transaction(s)?`)) return;
+    if (!confirm(`Are you sure you want to ignore ${selectedToIgnore.size} transaction(s)? They will be removed because they do not belong to Trinity Fees.`)) return;
     
     setIsProcessing(true);
     try {
@@ -212,6 +230,36 @@ export default function TransactionMappingPage() {
       }
     } catch (err) {
       console.error("Failed to ignore transactions:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleIgnoreSingle = async (txId: string, narration: string) => {
+    if (!confirm(`Ignore this transaction? It will be removed because it does not belong to Trinity Fees.\n\n${narration}`)) return;
+    
+    setIsProcessing(true);
+    try {
+      const res = await fetch("/api/reconcile/mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ignore_transactions", tempIds: [txId], dataSource })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showStatus(`🗑️ Ignored non-Trinity transaction.`);
+        setSelectedToIgnore(prev => {
+          const next = new Set(prev);
+          next.delete(txId);
+          return next;
+        });
+        setTempTransactions(prev => prev.filter(t => t.id !== txId));
+        fetchMappingData();
+      } else {
+        alert("Failed to ignore transaction: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      console.error("Failed to ignore transaction:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -247,6 +295,9 @@ export default function TransactionMappingPage() {
   };
 
   const filteredTransactions = tempTransactions.filter(t => {
+    if (selectedMonth !== "All" && t.sessionMonth && t.sessionMonth.toLowerCase() !== selectedMonth.toLowerCase()) {
+      return false;
+    }
     const s = searchQuery.toLowerCase();
     const narrationMatch = t.narration.toLowerCase().includes(s);
     const teacherMatch = t.mappedTeacherName.toLowerCase().includes(s);
@@ -272,7 +323,13 @@ export default function TransactionMappingPage() {
         groupedTransactions[tx.mappedTeacherId] = {
           teacherName: tx.mappedTeacherName,
           transactions: [],
-          candidates: candidates.filter(c => c.teacherId === tx.mappedTeacherId)
+          candidates: candidates.filter(c => {
+            if (c.teacherId !== tx.mappedTeacherId) return false;
+            if (selectedMonth !== "All" && c.sessionMonth) {
+              return c.sessionMonth.toLowerCase() === selectedMonth.toLowerCase();
+            }
+            return true;
+          })
         };
       }
       groupedTransactions[tx.mappedTeacherId].transactions.push(tx);
@@ -356,9 +413,42 @@ export default function TransactionMappingPage() {
 
       {/* Main Table: Grouped Transactions with horizontal scroll */}
       <div className="max-w-7xl mx-auto bg-slate-900 rounded-2xl border border-slate-800 mb-10 overflow-hidden shadow-2xl">
-        <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-lg font-bold text-white">Grouped Transactions & Matched Candidates</h2>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Narration Length Adjuster */}
+            <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs shadow-inner">
+              <Sliders className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="text-slate-400 font-medium whitespace-nowrap">Narration Width:</span>
+              <input 
+                type="range" 
+                min="240" 
+                max="850" 
+                step="25"
+                value={narrationWidth}
+                disabled={wrapNarration}
+                onChange={(e) => setNarrationWidth(Number(e.target.value))}
+                className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 disabled:opacity-30"
+                title="Adjust narration column width (px)"
+              />
+              <span className="font-mono text-slate-300 min-w-[42px] text-right font-semibold">
+                {wrapNarration ? "AUTO" : `${narrationWidth}px`}
+              </span>
+              <div className="h-4 w-px bg-slate-800 mx-1 shrink-0" />
+              <button
+                onClick={() => setWrapNarration(prev => !prev)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-xs transition-all ${
+                  wrapNarration 
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm" 
+                    : "bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60"
+                }`}
+                title={wrapNarration ? "Text wrapping is ON (full multiline text shown)" : "Enable complete text wrapping"}
+              >
+                {wrapNarration ? <Maximize2 className="w-3 h-3 text-emerald-400 shrink-0" /> : <Minimize2 className="w-3 h-3 shrink-0" />}
+                {wrapNarration ? "Wrap: ON" : "Wrap Full"}
+              </button>
+            </div>
+
             {selectedToIgnore.size > 0 && (
               <button
                 onClick={handleIgnoreSelected}
@@ -373,15 +463,19 @@ export default function TransactionMappingPage() {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+              className="bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 font-medium"
             >
+              <option value="All">All Months (Multi-Month)</option>
+              <option value="November">November</option>
+              <option value="October">October</option>
               <option value="September">September</option>
               <option value="August">August</option>
               <option value="July">July</option>
               <option value="June">June</option>
+              <option value="May">May</option>
             </select>
 
-            <div className="relative w-64">
+            <div className="relative w-56">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
               <input
                 type="text"
@@ -407,11 +501,16 @@ export default function TransactionMappingPage() {
             <table className="w-full text-left text-sm border-collapse min-w-[1100px]">
               <thead className="bg-slate-950/80 text-xs text-slate-400 uppercase font-semibold">
                 <tr>
-                  <th className="p-4 border-b border-slate-800 whitespace-nowrap">Bank Narration</th>
+                  <th 
+                    className="p-4 border-b border-slate-800 whitespace-nowrap"
+                    style={{ width: wrapNarration ? 'auto' : `${narrationWidth}px`, minWidth: '240px' }}
+                  >
+                    Bank Narration
+                  </th>
                   <th className="p-4 border-b border-slate-800">Amount</th>
                   <th className="p-4 border-b border-slate-800">Matched Teacher</th>
                   <th className="p-4 border-b border-slate-800 min-w-[300px]">Candidates in Row</th>
-                  <th className="p-4 border-b border-slate-800 text-center whitespace-nowrap">Header Rule</th>
+                  <th className="p-4 border-b border-slate-800 text-center whitespace-nowrap">Actions / Rule</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,8 +519,24 @@ export default function TransactionMappingPage() {
                   
                   return group.transactions.map((tx, txIdx) => (
                     <tr key={tx.id} className={`${bgColor} border-b border-slate-800/50 hover:brightness-110 transition-all`}>
-                      <td className="p-4 font-mono text-xs text-slate-300 max-w-xs truncate" title={tx.narration}>
-                        {tx.date} - {tx.narration}
+                      <td 
+                        className={`p-4 font-mono text-xs text-slate-300 transition-all cursor-pointer select-text ${
+                          wrapNarration || expandedRows.has(tx.id) ? 'whitespace-normal break-words leading-relaxed' : 'truncate'
+                        }`}
+                        style={{ 
+                          maxWidth: wrapNarration || expandedRows.has(tx.id) ? 'none' : `${narrationWidth}px`,
+                          width: wrapNarration ? 'auto' : `${narrationWidth}px`
+                        }}
+                        onClick={() => toggleRowExpand(tx.id)}
+                        title="Click to toggle full multiline narration view"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="text-slate-400 font-semibold shrink-0">{tx.date}</span>
+                          <span className="text-slate-500 shrink-0">-</span>
+                          <span className={wrapNarration || expandedRows.has(tx.id) ? "text-slate-100 font-medium" : ""}>
+                            {tx.narration}
+                          </span>
+                        </div>
                       </td>
                       <td className="p-4 font-mono font-bold text-emerald-400 whitespace-nowrap">
                         {formatCurrency(tx.amount)}
@@ -459,7 +574,9 @@ export default function TransactionMappingPage() {
                                 {group.candidates.map(c => (
                                   <div key={c.id} className={`inline-flex items-center border rounded-md py-1 pl-2 pr-1 text-xs ${isMismatch ? 'bg-rose-950 border-rose-800' : 'bg-slate-950/80 border-slate-700'}`}>
                                     <span className={isMismatch ? 'text-rose-200 font-medium' : 'text-slate-200 font-medium'}>{c.name}</span>
-                                    <span className={`${isMismatch ? 'text-rose-400' : 'text-slate-500'} ml-1.5 mr-2`} title={c.grade}>({formatGrade(c.grade)})</span>
+                                    <span className={`${isMismatch ? 'text-rose-400' : 'text-slate-400'} ml-1.5 mr-1 font-mono text-[11px]`} title={`${c.grade} • ${c.sessionMonth || ''} • ₹${c.fee}`}>
+                                      ({formatGrade(c.grade)}{c.sessionMonth ? ` • ${c.sessionMonth}` : ''} - {formatCurrency(c.fee)})
+                                    </span>
                                     <button 
                                       onClick={() => handleCandidateReassign(c.id, null)}
                                       className={`${isMismatch ? 'text-rose-400 hover:text-rose-200 hover:bg-rose-900' : 'text-slate-500 hover:text-rose-400 hover:bg-slate-800'} rounded p-0.5 transition-colors`}
@@ -506,6 +623,17 @@ export default function TransactionMappingPage() {
                             onChange={(e) => handleSelectAllUnmapped(e.target.checked)}
                           />
                           <span className="text-amber-200 text-xs font-bold uppercase tracking-wider">Select All Unassigned Transactions</span>
+                          {selectedToIgnore.size > 0 && (
+                            <button
+                              onClick={handleIgnoreSelected}
+                              disabled={isProcessing}
+                              className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1 rounded text-xs font-bold transition-all shadow-sm"
+                              title="Ignore and delete selected transactions"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Ignore Selected ({selectedToIgnore.size})
+                            </button>
+                          )}
                         </div>
                         <button
                           onClick={() => setSortOrder(prev => prev === "desc" ? "asc" : prev === "asc" ? "none" : "desc")}
@@ -518,13 +646,23 @@ export default function TransactionMappingPage() {
                   </tr>
                 )}
                 {unmappedTransactions.map(tx => (
-                  <tr key={tx.id} className={`${selectedToIgnore.has(tx.id) ? 'bg-rose-950/20' : 'bg-amber-950/20'} border-b border-slate-800/50`}>
-                    <td className="p-4 font-mono text-xs text-slate-300 max-w-xs truncate" title={tx.narration}>
-                      <div className="flex items-center gap-3">
+                  <tr key={tx.id} className={`${selectedToIgnore.has(tx.id) ? 'bg-rose-950/20' : 'bg-amber-950/20'} border-b border-slate-800/50 hover:brightness-110 transition-all`}>
+                    <td 
+                      className={`p-4 font-mono text-xs text-slate-300 transition-all select-text ${
+                        wrapNarration || expandedRows.has(tx.id) ? 'whitespace-normal break-words leading-relaxed' : 'truncate'
+                      }`}
+                      style={{ 
+                        maxWidth: wrapNarration || expandedRows.has(tx.id) ? 'none' : `${narrationWidth}px`,
+                        width: wrapNarration ? 'auto' : `${narrationWidth}px`
+                      }}
+                      title="Click text to toggle full multiline narration view"
+                    >
+                      <div className="flex items-start gap-3">
                         <input 
                           type="checkbox"
-                          className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-rose-500 focus:ring-rose-500 focus:ring-offset-slate-900"
+                          className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-rose-500 focus:ring-rose-500 focus:ring-offset-slate-900 mt-0.5 shrink-0"
                           checked={selectedToIgnore.has(tx.id)}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             const newSet = new Set(selectedToIgnore);
                             if (e.target.checked) newSet.add(tx.id);
@@ -532,7 +670,16 @@ export default function TransactionMappingPage() {
                             setSelectedToIgnore(newSet);
                           }}
                         />
-                        <span>{tx.date} - {tx.narration}</span>
+                        <div 
+                          className="flex items-start gap-2 cursor-pointer flex-1"
+                          onClick={() => toggleRowExpand(tx.id)}
+                        >
+                          <span className="text-slate-400 font-semibold shrink-0">{tx.date}</span>
+                          <span className="text-slate-500 shrink-0">-</span>
+                          <span className={wrapNarration || expandedRows.has(tx.id) ? "text-slate-100 font-medium" : ""}>
+                            {tx.narration}
+                          </span>
+                        </div>
                       </div>
                     </td>
                     <td className="p-4 font-mono font-bold text-emerald-400 whitespace-nowrap">
@@ -553,8 +700,16 @@ export default function TransactionMappingPage() {
                     <td className="p-4">
                       <span className="text-xs text-slate-500 italic">Assign a teacher to add students</span>
                     </td>
-                    <td className="p-4 text-center">
-                      <span className="text-xs text-amber-500">Needs Teacher</span>
+                    <td className="p-4 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => handleIgnoreSingle(tx.id, tx.narration)}
+                        disabled={isProcessing}
+                        className="inline-flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 px-3 py-1.5 rounded-md text-xs font-semibold transition-all shadow-sm disabled:opacity-50"
+                        title="Ignore this transaction (does not belong to Trinity Fees)"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        Ignore
+                      </button>
                     </td>
                   </tr>
                 ))}

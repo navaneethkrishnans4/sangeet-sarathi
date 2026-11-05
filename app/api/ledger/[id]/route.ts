@@ -18,6 +18,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       include: {
         candidates: {
           where: { status: "Active" },
+          include: {
+            orderNumber: true
+          },
           orderBy: { firstName: "asc" }
         },
         transactions: true
@@ -32,11 +35,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     const students = teacher.candidates.map(c => ({
       id: c.id,
-      name: `${c.firstName} ${c.lastName}`.trim(),
+      name: `${c.firstName} ${c.lastName || ""}`.trim(),
       grade: c.grade,
       subject: c.examType,
+      instrument: c.instrument || "",
       expectedFee: c.expectedFee,
-      enrolmentMonth: c.createdAt.toLocaleString('default', { month: 'short', year: 'numeric' }),
+      orderNumber: c.orderNumber?.orderNumber || "-",
+      sessionMonth: c.sessionMonth || "-",
+      enrolmentMonth: c.sessionMonth || c.createdAt.toLocaleString('default', { month: 'short', year: 'numeric' }),
       paymentStatus: c.paymentStatus
     }));
 

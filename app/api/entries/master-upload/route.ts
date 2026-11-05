@@ -107,6 +107,36 @@ function getTeacherKeyAndName(applicant: string, submitter: string, school: stri
   }
 }
 
+function parseCol39(val: any): { amount: number | null; billNo: string | null } {
+  if (!val) return { amount: null, billNo: null };
+  const s = String(val).trim();
+  const billMatch = s.match(/bill\s*no\.?\s*(\d+)/i);
+  const billNo = billMatch ? `Bill No. ${billMatch[1]}` : null;
+
+  let cleaned = s.replace(/bill\s*no\.?\s*\d+/gi, "").replace(/sangeeth\s*sarathi/gi, "").trim();
+  
+  if (cleaned.includes("-")) {
+    const parts = cleaned.match(/(\d[\d,]+(?:\.\d{1,2})?)/g);
+    if (parts && parts.length >= 2) {
+      const a = parseFloat(parts[0].replace(/,/g, ""));
+      const b = parseFloat(parts[1].replace(/,/g, ""));
+      if (!isNaN(a) && !isNaN(b)) {
+        return { amount: a - b, billNo };
+      }
+    }
+  }
+
+  const amtMatch = cleaned.match(/(\d[\d,]+(?:\.\d{1,2})?)/);
+  let amount: number | null = null;
+  if (amtMatch) {
+    const parsed = parseFloat(amtMatch[1].replace(/,/g, ""));
+    if (!isNaN(parsed) && parsed > 500) {
+      amount = parsed;
+    }
+  }
+  return { amount, billNo };
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -178,7 +208,7 @@ export async function POST(req: Request) {
     }
 
     // 2. Fetch existing database records in ONE fast parallel batch query
-    const [existingCandidates, existingTeachers, existingOrders] = await Promise.all([
+    const [existingCandidates, existingTeachers, existingOrders, existingBankTransactions] = await Promise.all([
       prisma.candidate.findMany({
         select: {
           id: true,
@@ -186,6 +216,8 @@ export async function POST(req: Request) {
           lastName: true,
           grade: true,
           instrument: true,
+          expectedFee: true,
+          teacherId: true,
           orderNumberId: true,
           sessionMonth: true,
           paymentStatus: true
@@ -195,13 +227,23 @@ export async function POST(req: Request) {
         select: {
           id: true,
           uniqueKey: true,
-          name: true
+          name: true,
+          teacherName: true
         }
       }),
       prisma.orderNumber.findMany({
         select: {
           id: true,
           orderNumber: true
+        }
+      }),
+      prisma.bankTransaction.findMany({
+        select: {
+          id: true,
+          reconciledTeacherId: true,
+          sessionMonth: true,
+          amount: true,
+          status: true
         }
       })
     ]);
@@ -213,16 +255,31 @@ export async function POST(req: Request) {
     }
 
     const teacherMap = new Map<string, string>();
+    const teacherDisplayMap = new Map<string, string>();
     for (const t of existingTeachers) {
       teacherMap.set(t.uniqueKey.toLowerCase(), t.id);
       teacherMap.set(t.name.toLowerCase(), t.id);
+      teacherDisplayMap.set(t.id, t.teacherName || t.name);
     }
 
     const candidateMap = new Map<string, any>();
+    const existingCandAmtByTeacherMonth = new Map<string, number>();
     for (const c of existingCandidates) {
       const key = `${c.firstName}_${c.lastName}_${c.grade}_${c.instrument}`.toLowerCase();
       candidateMap.set(key, c);
       candidateMap.set(c.id, c);
+      if (c.teacherId && c.sessionMonth) {
+        const tmKey = `${c.teacherId}_${c.sessionMonth}`.toLowerCase();
+        existingCandAmtByTeacherMonth.set(tmKey, (existingCandAmtByTeacherMonth.get(tmKey) || 0) + (c.expectedFee || 0));
+      }
+    }
+
+    const existingBankAmtByTeacherMonth = new Map<string, number>();
+    for (const bt of existingBankTransactions) {
+      if (bt.reconciledTeacherId && bt.sessionMonth && bt.status !== "Ignored") {
+        const tmKey = `${bt.reconciledTeacherId}_${bt.sessionMonth}`.toLowerCase();
+        existingBankAmtByTeacherMonth.set(tmKey, (existingBankAmtByTeacherMonth.get(tmKey) || 0) + bt.amount);
+      }
     }
 
     // 3. Ensure OrderNumbers exist
@@ -250,6 +307,16 @@ export async function POST(req: Request) {
     const candidatesToInsert: any[] = [];
     const candidatesToUpdate: { id: string; orderNumberId: string; sessionMonth: string; expectedFee: number; teacherId: string }[] = [];
     const bankTxsToInsert: any[] = [];
+
+    interface NewCandGroup {
+      teacherId: string;
+      teacherDisplayName: string;
+      sectionMonth: string;
+      cands: { firstName: string; lastName: string; candDeterministicId: string; fee: number; grade: string; instrument: string }[];
+      explicitBatchAmt: number | null;
+      billNo: string | null;
+    }
+    const newCandidatesByTeacherMonth = new Map<string, NewCandGroup>();
 
     // 4. Parse rows in-memory
     for (let i = 0; i < sections.length; i++) {
@@ -293,6 +360,10 @@ export async function POST(req: Request) {
         }
         totalFeeAmount += fee;
 
+        // Parse Column 39 (index 38) for batch amounts / bill numbers
+        const col39Raw = row[38] !== undefined && row[38] !== "" ? row[38] : (row[39] !== "" ? row[39] : null);
+        const { amount: col39BatchAmt, billNo: col39BillNo } = parseCol39(col39Raw);
+
         // Resolve teacher in-memory
         const { key: teacherKey, name: teacherName } = getTeacherKeyAndName(applicant, submitter, school, subEmail, candEmail);
         let teacherId = teacherMap.get(teacherKey.toLowerCase()) || teacherMap.get(teacherName.toLowerCase());
@@ -312,6 +383,7 @@ export async function POST(req: Request) {
           teacherId = newTeacher.id;
           teacherMap.set(teacherKey.toLowerCase(), teacherId);
           teacherMap.set(teacherName.toLowerCase(), teacherId);
+          teacherDisplayMap.set(teacherId, displayTeacherName);
         }
 
         // Check if candidate already exists in memory
@@ -353,20 +425,66 @@ export async function POST(req: Request) {
               orderNumberId: orderDbId
             });
 
-            bankTxsToInsert.push({
-              transactionDate: new Date(),
-              narration: `Master Enrollment Paid: ${firstName} ${lastName} (${candDeterministicId})`,
-              amount: fee,
-              reconciledMethod: "Master Enrollment Paid",
-              reconciledTeacherId: teacherId,
-              status: "Matched",
-              sessionMonth: sectionMonth
-            });
+            // Group newly enrolled candidates by (teacherId, sessionMonth)
+            const tmKey = `${teacherId}_${sectionMonth}`.toLowerCase();
+            const teacherDisplayName = teacherDisplayMap.get(teacherId) || submitter || applicant || "Unknown Teacher";
+            
+            if (!newCandidatesByTeacherMonth.has(tmKey)) {
+              newCandidatesByTeacherMonth.set(tmKey, {
+                teacherId,
+                teacherDisplayName,
+                sectionMonth,
+                cands: [],
+                explicitBatchAmt: col39BatchAmt,
+                billNo: col39BillNo
+              });
+            }
+            const group = newCandidatesByTeacherMonth.get(tmKey)!;
+            group.cands.push({ firstName, lastName, candDeterministicId, fee, grade, instrument });
+            if (col39BatchAmt && col39BatchAmt > 0) group.explicitBatchAmt = col39BatchAmt;
+            if (col39BillNo) group.billNo = col39BillNo;
 
             // Add to in-memory map so duplicate rows in same file are caught
             candidateMap.set(candMatchKey, { id: candDeterministicId });
             candidateMap.set(candDeterministicId, { id: candDeterministicId });
           }
+        }
+      }
+    }
+
+    // Reconcile and create batch Master Enrollment Paid transactions
+    if (!dryRun) {
+      for (const [tmKey, group] of newCandidatesByTeacherMonth.entries()) {
+        const { teacherId, teacherDisplayName, sectionMonth, cands, explicitBatchAmt, billNo } = group;
+        
+        const existingBankAmt = existingBankAmtByTeacherMonth.get(tmKey) || 0;
+        const existingCandAmt = existingCandAmtByTeacherMonth.get(tmKey) || 0;
+        const newCandAmt = cands.reduce((sum, c) => sum + c.fee, 0);
+        const totalNeeded = existingCandAmt + newCandAmt;
+        const remainingUnpaid = Math.max(0, totalNeeded - existingBankAmt);
+
+        if (remainingUnpaid > 0) {
+          const txAmount = explicitBatchAmt && explicitBatchAmt > 0 ? explicitBatchAmt : remainingUnpaid;
+          let narration = "";
+          if (cands.length === 1) {
+            const c = cands[0];
+            narration = `Master Enrollment Paid: ${c.firstName} ${c.lastName} (${c.candDeterministicId})${billNo ? ` [${billNo}]` : ""}`;
+          } else {
+            const studentNames = cands.map(c => `${c.firstName} ${c.lastName}`).join(", ");
+            narration = `Master Enrollment Paid: ${teacherDisplayName} - ${sectionMonth} (${cands.length} Students: ${studentNames})${billNo ? ` [${billNo}]` : ""}`;
+          }
+
+          bankTxsToInsert.push({
+            transactionDate: new Date(),
+            narration,
+            amount: txAmount,
+            reconciledMethod: "Master Enrollment Paid",
+            reconciledTeacherId: teacherId,
+            status: "Matched",
+            sessionMonth: sectionMonth || null
+          });
+
+          existingBankAmtByTeacherMonth.set(tmKey, existingBankAmt + txAmount);
         }
       }
     }

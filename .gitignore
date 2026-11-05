@@ -42,4 +42,5 @@ next-env.d.ts
 
 # Data engine credentials and cache
 data_engine/*.json
-data_engine/__pycache__/
+__pycache__/
+*.py[cod]
