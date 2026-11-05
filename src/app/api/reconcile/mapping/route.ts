@@ -92,7 +92,9 @@ export async function GET(req: Request) {
     // We already extracted month above
     
     const candidateWhere: any = { status: "Active" };
-    if (month) candidateWhere.sessionMonth = month;
+    if (month && month !== "All" && dataSource !== "temp") {
+      candidateWhere.sessionMonth = month;
+    }
 
     const candidates = await prisma.candidate.findMany({
       where: candidateWhere,
@@ -103,6 +105,7 @@ export async function GET(req: Request) {
         grade: true,
         expectedFee: true,
         teacherId: true,
+        sessionMonth: true,
         teacher: {
           select: {
             name: true,
@@ -135,6 +138,7 @@ export async function GET(req: Request) {
         grade: c.grade,
         fee: c.expectedFee,
         teacherId: c.teacherId,
+        sessionMonth: c.sessionMonth || "",
         teacherName: c.teacher ? (
         (c.teacher.teacherName && !c.teacher.teacherName.toLowerCase().includes("navneeth") && !c.teacher.teacherName.toLowerCase().includes("navaneeth"))
           ? c.teacher.teacherName
@@ -244,19 +248,26 @@ export async function POST(req: Request) {
 
     if (action === "ignore_transactions") {
       const { tempIds, dataSource } = body;
-      if (!Array.isArray(tempIds)) {
+      if (!Array.isArray(tempIds) || tempIds.length === 0) {
         return NextResponse.json({ success: false, error: "Missing tempIds array" }, { status: 400 });
       }
       if (dataSource === "main") {
         await prisma.bankTransaction.deleteMany({
           where: { id: { in: tempIds } }
         });
+      } else if (dataSource === "temp") {
+        await prisma.tempBankTransaction.deleteMany({
+          where: { id: { in: tempIds } }
+        });
       } else {
         await prisma.tempBankTransaction.deleteMany({
           where: { id: { in: tempIds } }
         });
+        await prisma.bankTransaction.deleteMany({
+          where: { id: { in: tempIds } }
+        });
       }
-      return NextResponse.json({ success: true, message: `Ignored and deleted ${tempIds.length} transactions.` });
+      return NextResponse.json({ success: true, message: `Ignored and removed ${tempIds.length} non-Trinity transaction(s).` });
     }
 
     if (action === "save_mappings_to_db") {

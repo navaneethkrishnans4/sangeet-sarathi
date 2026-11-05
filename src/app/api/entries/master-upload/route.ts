@@ -481,7 +481,7 @@ export async function POST(req: Request) {
             reconciledMethod: "Master Enrollment Paid",
             reconciledTeacherId: teacherId,
             status: "Matched",
-            sessionMonth
+            sessionMonth: sectionMonth || null
           });
 
           existingBankAmtByTeacherMonth.set(tmKey, existingBankAmt + txAmount);

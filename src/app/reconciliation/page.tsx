@@ -19,7 +19,8 @@ import {
   Search,
   Filter,
   UserCheck,
-  UserX
+  UserX,
+  Ban
 } from "lucide-react";
 import Link from "next/link";
 
@@ -162,6 +163,28 @@ export default function ReconciliationDashboard() {
       alert("Error performing bulk status update: " + err.message);
     } finally {
       setIsTogglingStatus(false);
+    }
+  };
+
+  const handleIgnoreDeposit = async (id: string, narration: string) => {
+    if (!confirm(`Ignore this deposit? It will be removed because it does not belong to Trinity Fees.\n\n${narration}`)) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/reconcile/mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ignore_transactions", tempIds: [id], dataSource: "main" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUnmatchedDeposits(prev => prev.filter(d => d.id !== id));
+        fetchInitialSummary();
+      } else {
+        alert("Failed to ignore transaction: " + (data.error || "Unknown error"));
+      }
+    } catch (err: any) {
+      alert("Error ignoring transaction: " + err.message);
     }
   };
 
@@ -724,16 +747,28 @@ export default function ReconciliationDashboard() {
                     <th className="p-3.5 rounded-l-xl">Date</th>
                     <th className="p-3.5">Narration / Details</th>
                     <th className="p-3.5">Source Bank</th>
-                    <th className="p-3.5 rounded-r-xl">Amount</th>
+                    <th className="p-3.5">Amount</th>
+                    <th className="p-3.5 rounded-r-xl text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {unmatchedDeposits.map((dep, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/40">
+                    <tr key={dep.id || idx} className="hover:bg-slate-800/40">
                       <td className="p-3.5 text-slate-400">{dep.date}</td>
                       <td className="p-3.5 font-mono text-xs text-slate-200">{dep.narration}</td>
                       <td className="p-3.5 text-slate-400">{dep.sourceBank}</td>
                       <td className="p-3.5 font-mono font-semibold text-amber-400">{formatCurrency(dep.amount)}</td>
+                      <td className="p-3.5 text-center">
+                        <button
+                          onClick={() => handleIgnoreDeposit(dep.id, dep.narration)}
+                          disabled={isTogglingStatus}
+                          className="inline-flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 px-3 py-1.5 rounded-md text-xs font-semibold transition-all shadow-sm disabled:opacity-50"
+                          title="Ignore this deposit because it does not belong to Trinity Fees"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          Ignore
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

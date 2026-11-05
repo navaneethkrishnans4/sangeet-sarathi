@@ -53,4 +53,5 @@ next-env.d.ts
 test_gemini.js
 remove_immanuel.py
 data_engine/*.json
-data_engine/__pycache__/
+__pycache__/
+*.py[cod]
