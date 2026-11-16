@@ -1,59 +1,241 @@
 import { NextResponse } from "next/server";
-import { exec } from "child_process";
-import { promisify } from "util";
-import fs from "fs";
-import path from "path";
-import os from "os";
+import crypto from "crypto";
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@prisma/client";
 
-const execAsync = promisify(exec);
+export const maxDuration = 120;
+
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool({
+  connectionString,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+});
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
+
+const FEE_MAP: Record<string, number> = {
+  "initial": 5500,
+  "in": 5500,
+  "grade 1": 6050,
+  "1": 6050,
+  "grade 2": 6700,
+  "2": 6700,
+  "grade 3": 7700,
+  "3": 7700,
+  "grade 4": 8600,
+  "4": 8600,
+  "grade 5": 9700,
+  "5": 9700,
+  "grade 6": 11300,
+  "6": 11300,
+  "grade 7": 12200,
+  "7": 12200,
+  "grade 8": 13500,
+  "8": 13500
+};
+
+function getFeeForGrade(grade: string): number {
+  if (!grade) return 0;
+  const clean = grade.toLowerCase().trim();
+  if (FEE_MAP[clean]) return FEE_MAP[clean];
+  const numMatch = clean.match(/\d+/);
+  if (numMatch && FEE_MAP[numMatch[0]]) return FEE_MAP[numMatch[0]];
+  if (clean.includes("init") || clean.includes("in")) return 5500;
+  return 0;
+}
+
+function normalizeGrade(grade: string): string {
+  if (!grade) return "Grade 1";
+  const clean = grade.toLowerCase().trim();
+  if (clean.includes("init") || clean === "in") return "Initial";
+  if (clean.includes("one") || clean.includes("1")) return "Grade 1";
+  if (clean.includes("two") || clean.includes("2")) return "Grade 2";
+  if (clean.includes("three") || clean.includes("3")) return "Grade 3";
+  if (clean.includes("four") || clean.includes("4")) return "Grade 4";
+  if (clean.includes("five") || clean.includes("5")) return "Grade 5";
+  if (clean.includes("six") || clean.includes("6")) return "Grade 6";
+  if (clean.includes("seven") || clean.includes("7")) return "Grade 7";
+  if (clean.includes("eight") || clean.includes("8")) return "Grade 8";
+  return grade.trim();
+}
+
+function normalizeInstrument(inst: string, fallbackSuite?: string): { instrument: string; examType: string } {
+  const clean = (inst || "").toLowerCase().trim();
+  if (clean.includes("ekb") || clean.includes("electronic keyboard") || clean.includes("keyboard")) {
+    return { instrument: "Electronic Keyboard", examType: fallbackSuite || "Classical & Jazz" };
+  }
+  if (clean.includes("piano")) {
+    return { instrument: "Piano", examType: fallbackSuite || "Classical & Jazz" };
+  }
+  if (clean.includes("classical guitar")) {
+    return { instrument: "Classical Guitar", examType: fallbackSuite || "Classical & Jazz" };
+  }
+  if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
+    return { instrument: "Acoustic Guitar", examType: fallbackSuite || "Rock & Pop" };
+  }
+  if (clean.includes("drum")) {
+    return { instrument: "Drum Kit", examType: fallbackSuite || "Rock & Pop" };
+  }
+  if (clean.includes("vocal") || clean.includes("sing")) {
+    return { instrument: "Vocals", examType: fallbackSuite || "Rock & Pop" };
+  }
+  if (clean.includes("violin")) {
+    return { instrument: "Violin", examType: fallbackSuite || "Classical & Jazz" };
+  }
+  return { instrument: inst ? inst.trim() : "Electronic Keyboard", examType: fallbackSuite || "Classical & Jazz" };
+}
+
+function generateUuid(name: string): string {
+  const hash = crypto.createHash("sha1").update(name).digest("hex");
+  return [
+    hash.substring(0, 8),
+    hash.substring(8, 12),
+    "5" + hash.substring(13, 16),
+    ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80).toString(16) + hash.substring(18, 20),
+    hash.substring(20, 32)
+  ].join("-");
+}
+
+async function resolveTeacher(
+  teacherName?: string | null,
+  schoolName?: string | null,
+  email?: string | null
+): Promise<{ teacherId: string; displayName: string }> {
+  const conditions: any[] = [];
+  if (email && email.includes("@")) {
+    conditions.push({ primary_email: { equals: email.trim(), mode: "insensitive" } });
+  }
+  if (teacherName && teacherName.trim()) {
+    const s = teacherName.trim();
+    conditions.push({ teacherName: { contains: s, mode: "insensitive" } });
+    conditions.push({ name: { contains: s, mode: "insensitive" } });
+    conditions.push({ aliases: { some: { alias: { contains: s, mode: "insensitive" } } } });
+  }
+  if (schoolName && schoolName.trim()) {
+    const a = schoolName.trim();
+    conditions.push({ schoolName: { contains: a, mode: "insensitive" } });
+    conditions.push({ name: { contains: a, mode: "insensitive" } });
+  }
+
+  if (conditions.length > 0) {
+    const teacher = await prisma.teacherAcademy.findFirst({
+      where: { OR: conditions }
+    });
+    if (teacher) {
+      return { teacherId: teacher.id, displayName: teacher.teacherName || teacher.name };
+    }
+  }
+
+  const primaryName = teacherName?.trim() || schoolName?.trim() || "Direct Entry";
+  const uniqueKey = email?.trim() 
+    ? `EMAIL:${email.trim().toLowerCase()}` 
+    : `NAME:${primaryName.toLowerCase()}`;
+  
+  const newId = generateUuid(uniqueKey);
+  const newTeacher = await prisma.teacherAcademy.upsert({
+    where: { uniqueKey },
+    update: {
+      teacherName: teacherName?.trim() || undefined,
+      schoolName: schoolName?.trim() || undefined,
+      primary_email: email?.trim() || undefined
+    },
+    create: {
+      id: newId,
+      uniqueKey,
+      name: primaryName,
+      teacherName: teacherName?.trim() || null,
+      schoolName: schoolName?.trim() || null,
+      primary_email: email?.trim() || null
+    }
+  });
+
+  return { teacherId: newTeacher.id, displayName: newTeacher.teacherName || newTeacher.name };
+}
 
 export async function POST(req: Request) {
   try {
     const { firstName, lastName, dob, examSuite, grade, subject, teacherName, schoolName, email, sessionMonth } = await req.json();
 
-    if (!firstName || !examSuite || !grade) {
-      return NextResponse.json({ success: false, error: "First Name, Exam Suite, and Grade are required." }, { status: 400 });
+    if (!firstName || !grade) {
+      return NextResponse.json({ success: false, error: "First Name and Grade are required." }, { status: 400 });
     }
 
-    // Format text representation of candidate entry
-    const formattedText = `1. ${firstName} ${lastName || ""}`.trim() + `\n` +
-      `${dob || "01/01/2000"}\n` +
-      `${examSuite} ${grade} ${subject || ""}`.trim() + `\n` +
-      `${email || ""}\n\n` +
-      `submitter name : ${teacherName || "Direct Entry"}\n` +
-      `academy name : ${schoolName || ""}`;
+    const targetMonth = sessionMonth || "November";
+    const normGrade = normalizeGrade(grade);
+    const { instrument, examType } = normalizeInstrument(subject, examSuite);
+    const fee = getFeeForGrade(normGrade);
 
-    // Create a temporary directory
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "manual-entry-"));
-    const tempTxtPath = path.join(tmpDir, "manual_entry.txt");
-    fs.writeFileSync(tempTxtPath, formattedText, "utf-8");
+    // Resolve Teacher
+    const { teacherId, displayName } = await resolveTeacher(teacherName, schoolName, email);
 
-    const newDbEngineDir = path.resolve(process.cwd(), "data_engine");
-    const convertCmd = `python3 convert_teacher_entries.py --input-folder "${tmpDir}" --master-music-sheet-id 1o-c-nrvq-LoQYyvAmGBgxsNQ6X9hll52LC-APwYxcqE --master-rp-sheet-id 1ee7cgY_YJjgTpMPtH7pQtVVDN1JWAjGlcONtqwae1VA --credentials-file credentials.json`;
+    // Deterministic Candidate ID
+    const candDeterministicId = generateUuid(
+      `${firstName.trim()}-${(lastName || "").trim()}-${examType}-${normGrade}-${instrument}`.toLowerCase().trim()
+    );
 
-    console.log("Running data_engine/convert_teacher_entries.py for Manual Entry...");
-    const { stdout: legacyOut, stderr: legacyErr } = await execAsync(convertCmd, { cwd: newDbEngineDir });
+    await prisma.candidate.upsert({
+      where: { id: candDeterministicId },
+      update: {
+        firstName: firstName.trim(),
+        lastName: (lastName || "").trim(),
+        examType,
+        grade: normGrade,
+        instrument,
+        expectedFee: fee,
+        teacherId,
+        sessionMonth: targetMonth,
+        updatedAt: new Date()
+      },
+      create: {
+        id: candDeterministicId,
+        firstName: firstName.trim(),
+        lastName: (lastName || "").trim(),
+        examType,
+        grade: normGrade,
+        instrument,
+        expectedFee: fee,
+        paymentStatus: "Pending",
+        status: "Active",
+        teacherId,
+        sessionMonth: targetMonth,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
 
-    if ((legacyErr && legacyErr.includes("Error")) || (legacyOut && (legacyOut.includes("ERROR") || legacyOut.includes("were NOT written")))) {
-      console.error(legacyErr || legacyOut);
-      return NextResponse.json({ success: false, error: "Failed to push to Master Sheet or incomplete records found", details: legacyErr || legacyOut }, { status: 500 });
-    }
+    await prisma.auditLog.create({
+      data: {
+        action: "UPSERT",
+        tableName: "Candidate",
+        recordId: candDeterministicId,
+        newValue: `Fee: ${fee}, Teacher: ${displayName} (${teacherId}), Month: ${targetMonth}`,
+        description: `Manual Entry: ${firstName} ${lastName || ""} (${normGrade} ${instrument})`
+      }
+    }).catch(err => console.warn("AuditLog warning:", err));
 
-    // Run sync script to pull into Postgres
-    const monthArg = sessionMonth || "September";
-    const syncCmd = `python3 sync_google_sheets_to_db.py --session-month "${monthArg}"`;
-    const { stdout: syncOut, stderr: syncErr } = await execAsync(syncCmd, { cwd: newDbEngineDir });
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    const sheetOutput = `[Direct PostgreSQL Database Engine Active]\nCandidate: ${firstName} ${lastName || ""} | ${normGrade} ${instrument} (${examType}) : ₹${fee.toLocaleString("en-IN")}`;
+    const dbOutput = `Teacher/Academy: ${displayName} [ID: ${teacherId}]\nSession Month: ${targetMonth}\nExpected Fee: ₹${fee.toLocaleString("en-IN")}\nStatus: Successfully recorded in database!`;
 
     return NextResponse.json({
       success: true,
-      message: "Manual Entry successfully written to Google Sheets and synced to PostgreSQL!",
-      sheetOutput: legacyOut,
-      dbOutput: syncOut
+      message: "Manual Entry successfully recorded in database!",
+      sheetOutput,
+      dbOutput,
+      candidate: {
+        id: candDeterministicId,
+        name: `${firstName} ${lastName || ""}`.trim(),
+        grade: normGrade,
+        instrument,
+        examType,
+        fee
+      }
     });
+
   } catch (error: any) {
-    console.error("API Error:", error);
+    console.error("API Error in /api/entries/manual:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
