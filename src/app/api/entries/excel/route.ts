@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { appendCandidatesToGoogleSheet } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -119,7 +120,7 @@ function generateUuid(name: string): string {
 async function resolveTeacher(
   teacherName?: string | null,
   schoolName?: string | null
-): Promise<{ teacherId: string; displayName: string }> {
+): Promise<{ teacherId: string; displayName: string; primaryEmail: string | null; schoolName: string | null }> {
   const conditions: any[] = [];
   if (teacherName && teacherName.trim()) {
     const s = teacherName.trim();
@@ -138,7 +139,12 @@ async function resolveTeacher(
       where: { OR: conditions }
     });
     if (teacher) {
-      return { teacherId: teacher.id, displayName: teacher.teacherName || teacher.name };
+      return { 
+        teacherId: teacher.id, 
+        displayName: teacher.teacherName || teacher.name,
+        primaryEmail: teacher.primary_email,
+        schoolName: teacher.schoolName
+      };
     }
   }
 
@@ -161,7 +167,12 @@ async function resolveTeacher(
     }
   });
 
-  return { teacherId: newTeacher.id, displayName: newTeacher.teacherName || newTeacher.name };
+  return { 
+    teacherId: newTeacher.id, 
+    displayName: newTeacher.teacherName || newTeacher.name,
+    primaryEmail: newTeacher.primary_email,
+    schoolName: newTeacher.schoolName
+  };
 }
 
 export async function POST(req: Request) {
@@ -177,7 +188,6 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const wb = xlsx.read(buffer, { type: "buffer", cellDates: true });
 
-    // Pick first non-empty sheet
     const sheetName = wb.Sheets["Enrolment Sheet"] ? "Enrolment Sheet" : wb.SheetNames[0];
     const sheet = wb.Sheets[sheetName];
     if (!sheet) {
@@ -189,7 +199,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "The uploaded file is empty" }, { status: 400 });
     }
 
-    // Detect header row
     let headerRowIdx = -1;
     let nameCol = -1;
     let gradeCol = -1;
@@ -224,14 +233,12 @@ export async function POST(req: Request) {
     }
 
     if (headerRowIdx === -1) {
-      // Fallback defaults: Col 1 Name, Col 3 Grade, Col 4 Subject
       headerRowIdx = 0;
       nameCol = 1;
       gradeCol = 3;
       subjectCol = 4;
     }
 
-    // Try detecting teacher from top rows or filename
     let detectedTeacherName = "";
     let detectedSchoolName = "";
     for (let r = 0; r < headerRowIdx; r++) {
@@ -246,13 +253,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // If still empty, check file name
     if (!detectedTeacherName && !detectedSchoolName) {
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "").replace(/[_\-]/g, " ");
       detectedTeacherName = cleanFileName;
     }
 
-    let { teacherId, displayName } = await resolveTeacher(detectedTeacherName, detectedSchoolName);
+    let teacherInfo = await resolveTeacher(detectedTeacherName, detectedSchoolName);
 
     let totalFee = 0;
     const processedCandidates: any[] = [];
@@ -271,13 +277,10 @@ export async function POST(req: Request) {
 
       if (!rawGrade && !rawSubject) continue;
 
-      // Check if row has teacher/school
       if (teacherCol !== -1 && row[teacherCol]) {
         const rowTeacher = String(row[teacherCol]).trim();
         if (rowTeacher && rowTeacher !== detectedTeacherName) {
-          const res = await resolveTeacher(rowTeacher, detectedSchoolName);
-          teacherId = res.teacherId;
-          displayName = res.displayName;
+          teacherInfo = await resolveTeacher(rowTeacher, detectedSchoolName);
         }
       }
 
@@ -300,7 +303,7 @@ export async function POST(req: Request) {
           grade: normGrade,
           instrument,
           expectedFee: fee,
-          teacherId,
+          teacherId: teacherInfo.teacherId,
           sessionMonth,
           updatedAt: new Date()
         },
@@ -314,7 +317,7 @@ export async function POST(req: Request) {
           expectedFee: fee,
           paymentStatus: "Pending",
           status: "Active",
-          teacherId,
+          teacherId: teacherInfo.teacherId,
           sessionMonth,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -326,14 +329,17 @@ export async function POST(req: Request) {
           action: "UPSERT",
           tableName: "Candidate",
           recordId: candDeterministicId,
-          newValue: `Fee: ${fee}, Teacher: ${displayName} (${teacherId}), Month: ${sessionMonth}`,
+          newValue: `Fee: ${fee}, Teacher: ${teacherInfo.displayName} (${teacherInfo.teacherId}), Month: ${sessionMonth}`,
           description: `Excel Upload (${file.name}): ${firstName} ${lastName} (${normGrade} ${instrument})`
         }
       }).catch(err => console.warn("AuditLog warning:", err));
 
       processedCandidates.push({
         id: candDeterministicId,
+        firstName,
+        lastName,
         name: `${firstName} ${lastName}`.trim(),
+        dob: "01/01/2000",
         grade: normGrade,
         instrument,
         examType,
@@ -341,21 +347,33 @@ export async function POST(req: Request) {
       });
     }
 
+    // Append to Google Sheets
+    const sheetResult = await appendCandidatesToGoogleSheet({
+      candidates: processedCandidates,
+      submitterName: teacherInfo.displayName,
+      submitterEmail: teacherInfo.primaryEmail || "trinitykochi.ops.office@gmail.com",
+      schoolName: teacherInfo.schoolName || detectedSchoolName || ""
+    });
+
     const candidateLines = processedCandidates.map(
       (c, idx) => `${idx + 1}. ${c.name} - ${c.grade} ${c.instrument} (${c.examType}) : ₹${c.fee.toLocaleString("en-IN")}`
     ).join("\n");
 
-    const sheetOutput = `[Direct PostgreSQL Database Engine Active]\nUploaded file: ${file.name}\nEnrolled ${processedCandidates.length} candidate(s):\n${candidateLines}`;
-    const dbOutput = `Teacher/Academy: ${displayName} [ID: ${teacherId}]\nSession Month: ${sessionMonth}\nTotal Candidates: ${processedCandidates.length}\nTotal Expected Fees: ₹${totalFee.toLocaleString("en-IN")}\nStatus: Successfully recorded in database!`;
+    const sheetOutput = sheetResult.success
+      ? `✅ Successfully appended ${sheetResult.rowsAppended} candidate(s) to Trinity ${sheetResult.sheetType} Master Google Sheet!\n\n${candidateLines}`
+      : `⚠️ Google Sheet status: ${sheetResult.error || "Sync pending"}\n\n${candidateLines}`;
+
+    const dbOutput = `Teacher/Academy: ${teacherInfo.displayName} [ID: ${teacherInfo.teacherId}]\nSession Month: ${sessionMonth}\nTotal Candidates: ${processedCandidates.length}\nTotal Expected Fees: ₹${totalFee.toLocaleString("en-IN")}\nDatabase: Successfully recorded in PostgreSQL!`;
 
     return NextResponse.json({
       success: true,
-      message: `Excel Roster (${file.name}) successfully processed ${processedCandidates.length} candidate(s) into database!`,
+      message: `Excel Roster (${file.name}) successfully processed into database and Google Sheet!`,
       sheetOutput,
       dbOutput,
       candidates: processedCandidates,
       totalFee,
-      teacher: displayName
+      teacher: teacherInfo.displayName,
+      sheetStatus: sheetResult
     });
 
   } catch (error: any) {

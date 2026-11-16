@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { appendCandidatesToGoogleSheet } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -273,7 +274,7 @@ async function resolveTeacher(
   submitterName?: string | null,
   academyName?: string | null,
   email?: string | null
-): Promise<{ teacherId: string; displayName: string }> {
+): Promise<{ teacherId: string; displayName: string; primaryEmail: string | null; schoolName: string | null }> {
   const conditions: any[] = [];
   if (email && email.includes("@")) {
     conditions.push({ primary_email: { equals: email.trim(), mode: "insensitive" } });
@@ -295,7 +296,12 @@ async function resolveTeacher(
       where: { OR: conditions }
     });
     if (teacher) {
-      return { teacherId: teacher.id, displayName: teacher.teacherName || teacher.name };
+      return { 
+        teacherId: teacher.id, 
+        displayName: teacher.teacherName || teacher.name,
+        primaryEmail: teacher.primary_email,
+        schoolName: teacher.schoolName
+      };
     }
   }
 
@@ -323,7 +329,12 @@ async function resolveTeacher(
     }
   });
 
-  return { teacherId: newTeacher.id, displayName: newTeacher.teacherName || newTeacher.name };
+  return { 
+    teacherId: newTeacher.id, 
+    displayName: newTeacher.teacherName || newTeacher.name,
+    primaryEmail: newTeacher.primary_email,
+    schoolName: newTeacher.schoolName
+  };
 }
 
 export async function POST(req: Request) {
@@ -350,10 +361,13 @@ export async function POST(req: Request) {
     }
 
     // 2. Resolve Teacher / Academy
-    const { teacherId, displayName } = await resolveTeacher(
+    const { teacherId, displayName, primaryEmail, schoolName } = await resolveTeacher(
       extracted.submitterName,
       extracted.academyName
     );
+
+    const resolvedSchool = schoolName || extracted.academyName || "";
+    const resolvedEmail = primaryEmail || "trinitykochi.ops.office@gmail.com";
 
     // 3. Process & Upsert Candidates into PostgreSQL
     let totalFee = 0;
@@ -412,29 +426,45 @@ export async function POST(req: Request) {
 
       processedCandidates.push({
         id: candDeterministicId,
+        firstName: cand.firstName.trim(),
+        lastName: cand.lastName.trim(),
         name: `${cand.firstName} ${cand.lastName}`,
+        dob: cand.dob || "01/01/2000",
         grade: normGrade,
         instrument,
         examType,
-        fee
+        fee,
+        email: cand.email || resolvedEmail
       });
     }
+
+    // 4. Synchronize with Trinity Master Google Sheet
+    const sheetResult = await appendCandidatesToGoogleSheet({
+      candidates: processedCandidates,
+      submitterName: displayName,
+      submitterEmail: resolvedEmail,
+      schoolName: resolvedSchool
+    });
 
     const candidateLines = processedCandidates.map(
       (c, idx) => `${idx + 1}. ${c.name} - ${c.grade} ${c.instrument} (${c.examType}) : ₹${c.fee.toLocaleString("en-IN")}`
     ).join("\n");
 
-    const sheetOutput = `[Direct PostgreSQL Database Engine Active]\nExtracted ${processedCandidates.length} candidate(s):\n${candidateLines}`;
-    const dbOutput = `Teacher/Academy: ${displayName} [ID: ${teacherId}]\nSession Month: ${targetMonth}\nTotal Candidates: ${processedCandidates.length}\nTotal Expected Fees: ₹${totalFee.toLocaleString("en-IN")}\nStatus: Successfully recorded in database!`;
+    const sheetOutput = sheetResult.success
+      ? `✅ Successfully appended ${sheetResult.rowsAppended} candidate(s) to Trinity ${sheetResult.sheetType} Master Google Sheet!\n\n${candidateLines}`
+      : `⚠️ Google Sheet status: ${sheetResult.error || "Sync pending"}\n\n${candidateLines}`;
+
+    const dbOutput = `Teacher/Academy: ${displayName} [ID: ${teacherId}]\nSession Month: ${targetMonth}\nTotal Candidates: ${processedCandidates.length}\nTotal Expected Fees: ₹${totalFee.toLocaleString("en-IN")}\nDatabase: Successfully synchronized with PostgreSQL!`;
 
     return NextResponse.json({
       success: true,
-      message: `Successfully processed ${processedCandidates.length} candidate(s) into database!`,
+      message: `Successfully processed ${processedCandidates.length} candidate(s) into database and Google Sheet!`,
       sheetOutput,
       dbOutput,
       candidates: processedCandidates,
       totalFee,
-      teacher: displayName
+      teacher: displayName,
+      sheetStatus: sheetResult
     });
 
   } catch (error: any) {
