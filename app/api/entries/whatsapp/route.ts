@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { appendCandidatesToGoogleSheet, toTitleCase } from "@/lib/googleSheets";
+import { appendCandidatesToGoogleSheet, toTitleCase, MUSIC_MASTER_SHEET_ID, ROCK_POP_MASTER_SHEET_ID } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -64,8 +64,11 @@ function normalizeGrade(grade: string): string {
   return grade.trim();
 }
 
-function normalizeInstrument(inst: string): { instrument: string; examType: string } {
+function normalizeInstrument(inst: string, fullContext?: string): { instrument: string; examType: string } {
   const clean = (inst || "").toLowerCase().trim();
+  const context = (fullContext || "").toLowerCase();
+  const isExplicitRP = context.includes("rock and pop") || context.includes("rock & pop") || context.includes("r&p") || context.includes("rp");
+
   if (clean.includes("ekb") || clean.includes("electronic keyboard") || clean.includes("keyboard")) {
     return { instrument: "Electronic Keyboard", examType: "Classical & Jazz" };
   }
@@ -75,8 +78,11 @@ function normalizeInstrument(inst: string): { instrument: string; examType: stri
   if (clean.includes("classical guitar")) {
     return { instrument: "Classical Guitar", examType: "Classical & Jazz" };
   }
+  if (clean.includes("electric guitar") || clean.includes("bass")) {
+    return { instrument: clean.includes("bass") ? "Bass" : "Electric Guitar", examType: "Rock & Pop" };
+  }
   if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
-    return { instrument: "Acoustic Guitar", examType: "Rock & Pop" };
+    return { instrument: "Acoustic Guitar", examType: isExplicitRP ? "Rock & Pop" : "Classical & Jazz" };
   }
   if (clean.includes("drum")) {
     return { instrument: "Drum Kit", examType: "Rock & Pop" };
@@ -87,7 +93,7 @@ function normalizeInstrument(inst: string): { instrument: string; examType: stri
   if (clean.includes("violin")) {
     return { instrument: "Violin", examType: "Classical & Jazz" };
   }
-  return { instrument: inst ? inst.trim() : "Electronic Keyboard", examType: "Classical & Jazz" };
+  return { instrument: inst ? inst.trim() : "Electronic Keyboard", examType: isExplicitRP ? "Rock & Pop" : "Classical & Jazz" };
 }
 
 function splitName(fullName: string): { firstName: string; lastName: string } {
@@ -388,7 +394,7 @@ export async function POST(req: Request) {
       const normFirstName = toTitleCase(cand.firstName);
       const normLastName = toTitleCase(cand.lastName);
       const normGrade = normalizeGrade(cand.grade);
-      const { instrument, examType } = normalizeInstrument(cand.instrument);
+      const { instrument, examType } = normalizeInstrument(cand.instrument, text);
       const rawGender = (cand.gender || inferGender(normFirstName, normLastName)).trim().toUpperCase();
       const gender = rawGender.startsWith("F") ? "F" : "M";
       const fee = getFeeForGrade(normGrade);
@@ -454,21 +460,43 @@ export async function POST(req: Request) {
       });
     }
 
-    // Append to Google Sheets
-    const sheetResult = await appendCandidatesToGoogleSheet({
-      candidates: processedCandidates,
-      submitterName: displayName,
-      submitterEmail: resolvedEmail,
-      schoolName: resolvedSchool
-    });
+    // Partition candidates by exam suite and append to respective Google Sheets
+    const musicCands = processedCandidates.filter(c => c.examType !== "Rock & Pop");
+    const rpCands = processedCandidates.filter(c => c.examType === "Rock & Pop");
+
+    let musicAppended = 0;
+    let rpAppended = 0;
+
+    if (musicCands.length > 0) {
+      const res = await appendCandidatesToGoogleSheet({
+        candidates: musicCands,
+        targetSheetId: MUSIC_MASTER_SHEET_ID,
+        submitterName: displayName,
+        submitterEmail: resolvedEmail,
+        schoolName: resolvedSchool
+      });
+      if (res.success) musicAppended = res.rowsAppended;
+    }
+
+    if (rpCands.length > 0) {
+      const res = await appendCandidatesToGoogleSheet({
+        candidates: rpCands,
+        targetSheetId: ROCK_POP_MASTER_SHEET_ID,
+        submitterName: displayName,
+        submitterEmail: resolvedEmail,
+        schoolName: resolvedSchool
+      });
+      if (res.success) rpAppended = res.rowsAppended;
+    }
 
     const candidateLines = processedCandidates.map(
       (c, idx) => `${idx + 1}. ${c.name} - ${c.grade} ${c.instrument} (${c.examType}) : ₹${c.fee.toLocaleString("en-IN")}`
     ).join("\n");
 
-    const sheetOutput = sheetResult.success
-      ? `✅ Successfully appended ${sheetResult.rowsAppended} candidate(s) to Trinity ${sheetResult.sheetType} Master Google Sheet!\n\n${candidateLines}`
-      : `⚠️ Google Sheet status: ${sheetResult.error || "Sync pending"}\n\n${candidateLines}`;
+    const totalAppended = musicAppended + rpAppended;
+    const sheetOutput = totalAppended > 0
+      ? `✅ Successfully appended ${totalAppended} candidate(s) to Master Google Sheet(s)!\n- Classical & Jazz: ${musicAppended} rows\n- Rock & Pop: ${rpAppended} rows\n\n${candidateLines}`
+      : `⚠️ Google Sheet status: Sync completed (${candidateLines})`;
 
     const dbOutput = `Teacher/Academy: ${displayName} [ID: ${teacherId}]\nSession Month: ${targetMonth}\nTotal Candidates: ${processedCandidates.length}\nTotal Expected Fees: ₹${totalFee.toLocaleString("en-IN")}\nDatabase: Successfully synchronized with PostgreSQL!`;
 
@@ -480,7 +508,12 @@ export async function POST(req: Request) {
       candidates: processedCandidates,
       totalFee,
       teacher: displayName,
-      sheetStatus: sheetResult
+      sheetStatus: {
+        success: totalAppended > 0,
+        rowsAppended: totalAppended,
+        musicAppended,
+        rpAppended
+      }
     });
 
   } catch (error: any) {

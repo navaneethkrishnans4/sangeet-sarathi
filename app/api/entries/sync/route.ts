@@ -244,7 +244,10 @@ export async function POST(req: Request) {
       const subjRaw = (r[8] || "");
       const { grade, instrument } = parseProduct(subjRaw);
 
-      const isRP = suiteRaw.includes("rock") || suiteRaw.includes("pop") || subjRaw.toLowerCase().includes("rock") || instrument === "Drum Kit" || instrument === "Vocals";
+      const isRP = (suiteRaw.includes("rock") || suiteRaw.includes("pop") || subjRaw.toLowerCase().includes("rock") || instrument === "Drum Kit" || instrument === "Vocals") &&
+        instrument !== "Electronic Keyboard" &&
+        instrument !== "Piano" &&
+        instrument !== "Violin";
       const examType = isRP ? "Rock & Pop" : "Classical & Jazz";
       const fee = parseFee(r[12], grade);
 

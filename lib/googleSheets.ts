@@ -170,22 +170,71 @@ export async function appendCandidatesToGoogleSheet(
     return { success: true, rowsAppended: 0, sheetType: "None" };
   }
 
+  // If no explicit targetSheetId is specified, safely partition candidates by suite!
+  if (!targetSheetId) {
+    const isCandidateRP = (c: CandidateSheetRow) => {
+      const type = (c.examType || "").toLowerCase();
+      const inst = (c.instrument || "").toLowerCase();
+      // Piano, Keyboard / EKB, Violin are strictly Classical & Jazz in Trinity
+      if (inst.includes("keyboard") || inst.includes("ekb") || inst.includes("piano") || inst.includes("violin")) {
+        return false;
+      }
+      if (type.includes("rock") || type.includes("pop") || type.includes("r&p") || type.includes("rp")) {
+        return true;
+      }
+      if (inst.includes("drum") || inst.includes("electric guitar") || inst.includes("bass")) {
+        return true;
+      }
+      return false;
+    };
+
+    const musicCands = candidates.filter(c => !isCandidateRP(c));
+    const rpCands = candidates.filter(c => isCandidateRP(c));
+
+    let rowsAppended = 0;
+    const types: string[] = [];
+
+    if (musicCands.length > 0) {
+      const resMusic = await appendCandidatesToGoogleSheet({
+        ...params,
+        candidates: musicCands,
+        targetSheetId: MUSIC_MASTER_SHEET_ID
+      });
+      if (resMusic.success) {
+        rowsAppended += resMusic.rowsAppended;
+        types.push("Classical & Jazz");
+      }
+    }
+
+    if (rpCands.length > 0) {
+      const resRP = await appendCandidatesToGoogleSheet({
+        ...params,
+        candidates: rpCands,
+        targetSheetId: ROCK_POP_MASTER_SHEET_ID
+      });
+      if (resRP.success) {
+        rowsAppended += resRP.rowsAppended;
+        types.push("Rock & Pop");
+      }
+    }
+
+    return {
+      success: true,
+      rowsAppended,
+      sheetType: types.join(" & ") || "Music (Classical & Jazz)"
+    };
+  }
+
   try {
     const token = await getAccessToken();
 
-    const isRockAndPop = targetSheetId
-      ? targetSheetId === ROCK_POP_MASTER_SHEET_ID
-      : candidates.some(c => 
-          c.examType.toLowerCase().includes("rock") || 
-          ["drum", "drums", "drum kit", "vocals", "bass"].some(k => c.instrument.toLowerCase().includes(k))
-        );
-
-    const sheetId = targetSheetId || (isRockAndPop ? ROCK_POP_MASTER_SHEET_ID : MUSIC_MASTER_SHEET_ID);
+    const isRockAndPop = targetSheetId === ROCK_POP_MASTER_SHEET_ID;
+    const sheetId = targetSheetId;
     const sheetType = isRockAndPop ? "Rock & Pop" : "Music (Classical & Jazz)";
 
     const rows = candidates.map(c => {
       const row = new Array(38).fill("");
-      const isRP = sheetId === ROCK_POP_MASTER_SHEET_ID || c.examType.toLowerCase().includes("rock");
+      const isRP = isRockAndPop;
       const suiteName = isRP ? "Rock and Pop (Digital)" : "Classical and Jazz (Digital)";
       const prodName = isRP 
         ? `Rock and Pop ${c.grade} (Digital)` 
