@@ -236,6 +236,8 @@ export async function POST(req: Request) {
       existingMasterSet.add(fullName);
 
       const dob = parseDob(r[4]);
+      const rawGender = (r[5] || "").trim().toUpperCase();
+      const gender = rawGender.startsWith("F") ? "F" : "M";
       const candEmail = (r[1] || "").trim();
       const subEmail = (r[6] || "").trim() || candEmail;
       const suiteRaw = (r[7] || "").toLowerCase();
@@ -253,6 +255,7 @@ export async function POST(req: Request) {
         firstName,
         lastName,
         dob,
+        gender,
         grade,
         instrument,
         examType,

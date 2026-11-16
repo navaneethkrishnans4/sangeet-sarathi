@@ -247,6 +247,7 @@ export async function POST(req: Request) {
     let lnCol = -1;
     let singleNameCol = -1;
     let dobCol = -1;
+    let genderCol = -1;
     let suiteCol = -1;
     let prodCol = -1;
     let gradeCol = -1;
@@ -265,6 +266,7 @@ export async function POST(req: Request) {
         else if (singleNameCol === -1 && (val === "name" || val === "candidate name" || val === "student name")) singleNameCol = c;
 
         if (dobCol === -1 && (val.includes("dob") || val.includes("birth") || val.includes("date of birth"))) dobCol = c;
+        if (genderCol === -1 && (val === "gender" || val.includes("gender") || val === "sex" || val === "m/f" || val === "m / f")) genderCol = c;
         if (suiteCol === -1 && (val.includes("exam suite") || val.includes("suite"))) suiteCol = c;
         if (prodCol === -1 && (val.includes("product") || val.includes("examination"))) prodCol = c;
         if (gradeCol === -1 && (val === "grade" || val === "exam level")) gradeCol = c;
@@ -286,6 +288,7 @@ export async function POST(req: Request) {
       fnCol = 1;
       lnCol = 2;
       dobCol = 3;
+      genderCol = 4;
       suiteCol = 6;
       subjCol = 8;
       gradeCol = 9;
@@ -402,6 +405,13 @@ export async function POST(req: Request) {
         }
       }
 
+      // Gender
+      let genderStr = "M";
+      if (genderCol !== -1 && row[genderCol]) {
+        const gVal = String(row[genderCol]).trim().toUpperCase();
+        genderStr = gVal.startsWith("F") ? "F" : "M";
+      }
+
       const normFirstName = toTitleCase(rawFirstName);
       const normLastName = toTitleCase(rawLastName);
       const normGrade = normalizeGrade(extractedGrade);
@@ -459,6 +469,7 @@ export async function POST(req: Request) {
         lastName: normLastName,
         name: `${normFirstName} ${normLastName}`.trim(),
         dob: dobStr,
+        gender: genderStr,
         grade: normGrade,
         instrument,
         examType,

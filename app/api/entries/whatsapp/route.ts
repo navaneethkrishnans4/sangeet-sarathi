@@ -106,6 +106,17 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
   };
 }
 
+export function inferGender(firstName: string, lastName: string): string {
+  const full = `${firstName} ${lastName}`.toLowerCase().trim();
+  const f = (firstName || "").toLowerCase().trim();
+  const femalePatterns = [
+    /\b(mayukha|madhuchandrika|ankitha|amala|rachel|teresa|prajna|michelle|varunavisri|navami|elena|vanshika|anlin|anagha|shriya|karen|pauline|senolin|aleena|amelia|anjana|anya|gianna|johannah|samyuktha|shreya|siona|veda|kshitija|joanna|anna|eshana|freya|serah|jenolyn|sthuthi|meghna|adina|devavaiga|rishima|leya)\b/,
+    /(devi|kumari|ammu|mary|mol|priya|lakshmi|ananya|diya|sneha|arya)$/
+  ];
+  if (femalePatterns.some(p => p.test(f) || p.test(full))) return "F";
+  return "M";
+}
+
 function generateUuid(name: string): string {
   const hash = crypto.createHash("sha1").update(name).digest("hex");
   return [
@@ -121,6 +132,7 @@ interface ExtractedCandidate {
   firstName: string;
   lastName: string;
   dob?: string;
+  gender?: string | null;
   grade: string;
   instrument: string;
   email?: string | null;
@@ -143,6 +155,7 @@ Standardize:
 - instrument: 'Electronic Keyboard' for EKB/keyboard, 'Piano', 'Acoustic Guitar', 'Drum Kit', 'Violin', 'Classical Guitar', etc.
 - firstName and lastName: split student full name properly and format with Proper Casing (e.g. 'Thejus V' and 'Nair', 'Parthiv' and 'Pradeep'). Single letter initials must stay uppercase (e.g. 'V', 'K', 'A', 'N').
 - dob: DD/MM/YYYY.
+- gender: 'M' or 'F' (infer accurately based on the candidate's Indian/Christian/English name; e.g. Mayukha -> F, Madhuchandrika -> F, Ankitha -> F, Amala -> F, Teresa -> F, Rachel -> F, Thejus -> M, Parthiv -> M, Aadhil -> M, Vidhun -> M, Reyansh -> M, Daniel -> M).
 - submitterName: extracted submitter/teacher name.
 - academyName: extracted academy/music school name.
 
@@ -158,6 +171,7 @@ Output JSON schema:
       "firstName": string,
       "lastName": string,
       "dob": string,
+      "gender": "M" | "F",
       "grade": string,
       "instrument": string,
       "email": string | null
@@ -260,6 +274,7 @@ function extractWithRegex(rawText: string): ExtractedData {
         firstName,
         lastName,
         dob: dobStr,
+        gender: inferGender(firstName, lastName),
         grade: rawGrade,
         instrument: rawInst,
         email: emailStr
@@ -374,6 +389,8 @@ export async function POST(req: Request) {
       const normLastName = toTitleCase(cand.lastName);
       const normGrade = normalizeGrade(cand.grade);
       const { instrument, examType } = normalizeInstrument(cand.instrument);
+      const rawGender = (cand.gender || inferGender(normFirstName, normLastName)).trim().toUpperCase();
+      const gender = rawGender.startsWith("F") ? "F" : "M";
       const fee = getFeeForGrade(normGrade);
       totalFee += fee;
 
@@ -428,6 +445,7 @@ export async function POST(req: Request) {
         lastName: normLastName,
         name: `${normFirstName} ${normLastName}`,
         dob: cand.dob || "01/01/2000",
+        gender,
         grade: normGrade,
         instrument,
         examType,
