@@ -4,7 +4,8 @@ import {
   ArrowRightLeft, 
   BookOpen, 
   FileSpreadsheet, 
-  Database
+  Database,
+  GraduationCap
 } from "lucide-react";
 
 export default function Home() {
@@ -85,6 +86,22 @@ export default function Home() {
             <h2 className="text-2xl font-bold mb-2">Database Viewer</h2>
             <p className="text-slate-400 flex-grow">
               Directly view raw data inside all your database tables. Faster and more reliable than Prisma Studio!
+            </p>
+          </div>
+        </Link>
+
+        {/* Public Enrollment Form Card */}
+        <Link href="/enroll" className="group" target="_blank">
+          <div className="h-full bg-slate-800/50 backdrop-blur-md border border-amber-500/30 rounded-3xl p-8 hover:bg-slate-700/50 hover:border-amber-400 transition-all duration-300 shadow-xl hover:shadow-amber-500/10 cursor-pointer flex flex-col relative overflow-hidden">
+            <div className="absolute top-4 right-4 bg-amber-500/20 text-amber-300 text-xs font-semibold px-2.5 py-1 rounded-full border border-amber-500/30">
+              Public Portal
+            </div>
+            <div className="bg-amber-500/20 p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
+              <GraduationCap className="w-8 h-8 text-amber-400" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2 text-white">Public Enrollment Form</h2>
+            <p className="text-slate-400 flex-grow">
+              Shareable link for teachers & parents. Includes direct UPI payment, WhatsApp receipt upload, and yellow highlight Google Sheet sync.
             </p>
           </div>
         </Link>

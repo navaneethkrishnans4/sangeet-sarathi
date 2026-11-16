@@ -159,6 +159,7 @@ export interface SheetAppendParams {
   submitterEmail?: string | null;
   schoolName?: string | null;
   targetSheetId?: string;
+  highlightYellow?: boolean;
 }
 
 export async function appendCandidatesToGoogleSheet(
@@ -288,6 +289,46 @@ export async function appendCandidatesToGoogleSheet(
     if (data.error) {
       console.error("Google Sheets append API error:", data.error);
       return { success: false, rowsAppended: 0, sheetType, error: data.error.message || "Failed to append rows" };
+    }
+
+    if (params.highlightYellow && data.updates && data.updates.updatedRange) {
+      const match = data.updates.updatedRange.match(/!A(\d+):[A-Za-z]+(\d+)/i) || data.updates.updatedRange.match(/!A(\d+)/i);
+      if (match) {
+        const startRowNum = parseInt(match[1], 10);
+        const endRowNum = match[2] ? parseInt(match[2], 10) : startRowNum;
+        const gid = sheetId === MUSIC_MASTER_SHEET_ID ? 2002089075 : 707454481;
+
+        try {
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              requests: [{
+                repeatCell: {
+                  range: {
+                    sheetId: gid,
+                    startRowIndex: startRowNum - 1,
+                    endRowIndex: endRowNum,
+                    startColumnIndex: 0,
+                    endColumnIndex: 38
+                  },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 1.0, green: 1.0, blue: 0.0 }
+                    }
+                  },
+                  fields: "userEnteredFormat.backgroundColor"
+                }
+              }]
+            })
+          });
+        } catch (colorErr) {
+          console.warn("Failed to apply yellow highlight:", colorErr);
+        }
+      }
     }
 
     return {
