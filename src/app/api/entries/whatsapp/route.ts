@@ -53,14 +53,23 @@ function normalizeGrade(grade: string): string {
   if (!grade) return "Grade 1";
   const clean = grade.toLowerCase().trim();
   if (clean.includes("init") || clean === "in") return "Initial";
-  if (clean.includes("one") || clean.includes("1")) return "Grade 1";
-  if (clean.includes("two") || clean.includes("2")) return "Grade 2";
-  if (clean.includes("three") || clean.includes("3")) return "Grade 3";
-  if (clean.includes("four") || clean.includes("4")) return "Grade 4";
-  if (clean.includes("five") || clean.includes("5")) return "Grade 5";
-  if (clean.includes("six") || clean.includes("6")) return "Grade 6";
-  if (clean.includes("seven") || clean.includes("7")) return "Grade 7";
-  if (clean.includes("eight") || clean.includes("8")) return "Grade 8";
+
+  // Check for explicit Grade + Number or Ordinal: e.g. "Grade 2", "2nd Grade", "2nd", "Grade 2nd"
+  const match = clean.match(/(?:grade|geade)?\s*([1-8])(?:st|nd|rd|th)?\b/i) ||
+                clean.match(/\b([1-8])(?:st|nd|rd|th)?\s*(?:grade|geade)?\b/i);
+  if (match) {
+    return `Grade ${match[1]}`;
+  }
+
+  if (/\b(one|first)\b/i.test(clean)) return "Grade 1";
+  if (/\b(two|second)\b/i.test(clean)) return "Grade 2";
+  if (/\b(three|third)\b/i.test(clean)) return "Grade 3";
+  if (/\b(four|fourth)\b/i.test(clean)) return "Grade 4";
+  if (/\b(five|fifth)\b/i.test(clean)) return "Grade 5";
+  if (/\b(six|sixth)\b/i.test(clean)) return "Grade 6";
+  if (/\b(seven|seventh)\b/i.test(clean)) return "Grade 7";
+  if (/\b(eight|eighth)\b/i.test(clean)) return "Grade 8";
+
   return grade.trim();
 }
 
@@ -150,6 +159,55 @@ interface ExtractedData {
   candidates: ExtractedCandidate[];
 }
 
+function parseGradeAndInstrument(rawStr: string): { grade: string; instrument: string } {
+  const clean = (rawStr || "").trim();
+
+  // 1. Ordinal followed by grade: "1st grade", "2nd grade", "3rd grade", "1st geade", "2 grade", "2nd"
+  const ordGradeMatch = clean.match(/(\d+)(?:st|nd|rd|th)?\s*(?:grade|geade)/i);
+  if (ordGradeMatch) {
+    const num = ordGradeMatch[1];
+    const inst = clean.replace(ordGradeMatch[0], "").replace(/[\.\,\:\-]+/g, " ").trim();
+    return { grade: `Grade ${num}`, instrument: inst };
+  }
+
+  // 2. Grade followed by number or name: "grade 2", "grade 2nd", "grade initial", "grade one"
+  const prefixGradeMatch = clean.match(/(?:grade|geade)\s*([a-zA-Z0-9]+)/i);
+  if (prefixGradeMatch) {
+    const val = prefixGradeMatch[1];
+    const inst = clean.replace(prefixGradeMatch[0], "").replace(/[\.\,\:\-]+/g, " ").trim();
+    const numMatch = val.match(/\d+/);
+    return {
+      grade: numMatch ? `Grade ${numMatch[0]}` : (val.toLowerCase().includes("init") ? "Initial" : val),
+      instrument: inst
+    };
+  }
+
+  // 3. Standalone ordinal: "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"
+  const ordMatch = clean.match(/\b([1-8])(?:st|nd|rd|th)\b/i);
+  if (ordMatch) {
+    const num = ordMatch[1];
+    const inst = clean.replace(ordMatch[0], "").replace(/[\.\,\:\-]+/g, " ").trim();
+    return { grade: `Grade ${num}`, instrument: inst };
+  }
+
+  // 4. Initial
+  const initMatch = clean.match(/\b(initial|init|in)\b/i);
+  if (initMatch) {
+    const inst = clean.replace(initMatch[0], "").replace(/[\.\,\:\-]+/g, " ").trim();
+    return { grade: "Initial", instrument: inst };
+  }
+
+  // 5. Standalone digit 1-8
+  const digitMatch = clean.match(/\b([1-8])\b/);
+  if (digitMatch) {
+    const num = digitMatch[1];
+    const inst = clean.replace(digitMatch[0], "").replace(/[\.\,\:\-]+/g, " ").trim();
+    return { grade: `Grade ${num}`, instrument: inst };
+  }
+
+  return { grade: "Grade 1", instrument: clean.replace(/[\.\,\:\-]+/g, " ").trim() };
+}
+
 async function extractWithGemini(rawText: string): Promise<ExtractedData | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -185,7 +243,7 @@ Output JSON schema:
   ]
 }`;
 
-  const modelsToTry = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+  const modelsToTry = ["gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-3.8-flash"];
   for (const modelName of modelsToTry) {
     try {
       const model = genAI.getGenerativeModel({
@@ -194,7 +252,14 @@ Output JSON schema:
       });
       const res = await model.generateContent(prompt);
       const text = res.response.text();
-      const parsed = JSON.parse(text);
+      let parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        if (parsed[0] && Array.isArray(parsed[0].candidates)) {
+          parsed = parsed[0];
+        } else if (parsed[0] && (parsed[0].firstName || parsed[0].name)) {
+          parsed = { submitterName: null, academyName: null, candidates: parsed };
+        }
+      }
       if (parsed && Array.isArray(parsed.candidates) && parsed.candidates.length > 0) {
         return parsed;
       }
@@ -209,12 +274,12 @@ function extractWithRegex(rawText: string): ExtractedData {
   let submitterName: string | null = null;
   let academyName: string | null = null;
 
-  const submMatch = rawText.match(/submiter\s*name\s*[:\-]?\s*([A-Za-z\s]+?)(?:\s+convert|\s+please|,|\.|\n|$)/i) || 
-                    rawText.match(/teacher\s*name\s*[:\-]?\s*([A-Za-z\s]+?)(?:\s+convert|\s+please|,|\.|\n|$)/i);
+  const submMatch = rawText.match(/(?:submiter|submitter|teacher)\s*(?:name)?\s*[:\-]?\s*([A-Za-z\s]+?)(?:\s+convert|\s+please|,|\.|\n|$)/i);
   if (submMatch) submitterName = submMatch[1].trim();
 
-  const acadMatch = rawText.match(/academy\s*(?:name)?\s*[:\-]?\s*([A-Za-z\s]+?)(?:,|\.|\n|$)/i) ||
-                    rawText.match(/from\s+([A-Za-z\s]+?(?:Pitch|Academy|School|Music|Institute))/i);
+  const acadMatch = rawText.match(/(?:academy|school|institute)\s*(?:name)?\s*[:\-]?\s*([A-Za-z\s]+?)(?:,|\.|\n|$)/i) ||
+                    rawText.match(/from\s+([A-Za-z\s]+?(?:Pitch|Academy|School|Music|Institute))/i) ||
+                    rawText.match(/\b([A-Za-z\s]+?(?:School\s+of\s+Music|Music\s+School|Academy))\b/i);
   if (acadMatch) academyName = acadMatch[1].trim();
 
   const senderMatch = rawText.match(/\]\s*([^:\n]+):/);
@@ -233,6 +298,7 @@ function extractWithRegex(rawText: string): ExtractedData {
     let gradeStr = "";
     let dobStr = "";
     let emailStr: string | null = null;
+    let genderStr: string | null = null;
 
     for (const rawLine of lines) {
       if (/they are from|submiter|submitter|academy name/i.test(rawLine)) continue;
@@ -250,39 +316,49 @@ function extractWithRegex(rawText: string): ExtractedData {
         continue;
       }
 
-      if (/\b(?:grade|geade|initial|g[- ]?\d)\b/i.test(line)) {
+      if (/^(?:gender\s*:\s*)?(male|female|m|f)\b/i.test(line)) {
+        const m = line.match(/\b(male|female|m|f)\b/i);
+        if (m) genderStr = m[1].toUpperCase().startsWith("F") ? "F" : "M";
+        continue;
+      }
+
+      if (/\b(?:grade|geade|initial|init|g[- ]?\d|\d(?:st|nd|rd|th)\s*(?:grade|geade)?)\b/i.test(line)) {
         gradeStr = line;
         continue;
       }
 
-      if (!candidateName && line.length > 2) {
+      if (/^teacher\s*:/i.test(line)) {
+        if (!submitterName) {
+          const t = line.replace(/^teacher\s*:\s*/i, "").trim();
+          if (t) submitterName = t;
+        }
+        continue;
+      }
+
+      if (/school|academy|music/i.test(line) && !candidateName) {
+        if (!academyName) {
+          const a = line.replace(/[\.\,\:\-]+/g, " ").trim();
+          if (a.length > 5) academyName = a;
+        }
+        continue;
+      }
+
+      if (!candidateName && line.length > 2 && !/school|academy|institute/i.test(line)) {
         candidateName = line;
       }
     }
 
     if (candidateName && (gradeStr || dobStr)) {
       const { firstName, lastName } = splitName(candidateName);
-      let rawGrade = "";
-      let rawInst = "";
-
-      const gMatch = gradeStr.match(/(?:grade|geade)\s*([a-zA-Z0-9]+)/i) || 
-                     gradeStr.match(/\b(initial|in)\b/i) ||
-                     gradeStr.match(/\b([1-8])\b/);
-      if (gMatch) {
-        rawGrade = gMatch[0];
-        rawInst = gradeStr.replace(gMatch[0], "").trim();
-      } else {
-        rawGrade = "Grade 1";
-        rawInst = gradeStr;
-      }
+      const { grade, instrument } = parseGradeAndInstrument(gradeStr);
 
       candidates.push({
         firstName,
         lastName,
         dob: dobStr,
-        gender: inferGender(firstName, lastName),
-        grade: rawGrade,
-        instrument: rawInst,
+        gender: genderStr || inferGender(firstName, lastName),
+        grade,
+        instrument,
         email: emailStr
       });
     }

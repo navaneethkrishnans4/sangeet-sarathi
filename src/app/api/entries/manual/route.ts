@@ -52,14 +52,22 @@ function normalizeGrade(grade: string): string {
   if (!grade) return "Grade 1";
   const clean = grade.toLowerCase().trim();
   if (clean.includes("init") || clean === "in") return "Initial";
-  if (clean.includes("one") || clean.includes("1")) return "Grade 1";
-  if (clean.includes("two") || clean.includes("2")) return "Grade 2";
-  if (clean.includes("three") || clean.includes("3")) return "Grade 3";
-  if (clean.includes("four") || clean.includes("4")) return "Grade 4";
-  if (clean.includes("five") || clean.includes("5")) return "Grade 5";
-  if (clean.includes("six") || clean.includes("6")) return "Grade 6";
-  if (clean.includes("seven") || clean.includes("7")) return "Grade 7";
-  if (clean.includes("eight") || clean.includes("8")) return "Grade 8";
+
+  const match = clean.match(/(?:grade|geade)?\s*([1-8])(?:st|nd|rd|th)?\b/i) ||
+                clean.match(/\b([1-8])(?:st|nd|rd|th)?\s*(?:grade|geade)?\b/i);
+  if (match) {
+    return `Grade ${match[1]}`;
+  }
+
+  if (/\b(one|first)\b/i.test(clean)) return "Grade 1";
+  if (/\b(two|second)\b/i.test(clean)) return "Grade 2";
+  if (/\b(three|third)\b/i.test(clean)) return "Grade 3";
+  if (/\b(four|fourth)\b/i.test(clean)) return "Grade 4";
+  if (/\b(five|fifth)\b/i.test(clean)) return "Grade 5";
+  if (/\b(six|sixth)\b/i.test(clean)) return "Grade 6";
+  if (/\b(seven|seventh)\b/i.test(clean)) return "Grade 7";
+  if (/\b(eight|eighth)\b/i.test(clean)) return "Grade 8";
+
   return grade.trim();
 }
 
