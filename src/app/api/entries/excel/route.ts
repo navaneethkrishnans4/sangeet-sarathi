@@ -105,6 +105,11 @@ function normalizeInstrument(inst: string, explicitSuite?: string): { instrument
     instrument = toTitleCase(inst.trim());
   }
 
+  // Piano, Keyboard, Violin, Classical Guitar are strictly Classical & Jazz
+  if (instrument === "Electronic Keyboard" || instrument === "Piano" || instrument === "Violin" || instrument === "Classical Guitar") {
+    examType = "Classical & Jazz";
+  }
+
   return { instrument, examType };
 }
 

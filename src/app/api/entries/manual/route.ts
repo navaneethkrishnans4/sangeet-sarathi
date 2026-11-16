@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { appendCandidatesToGoogleSheet, toTitleCase } from "@/lib/googleSheets";
+import { appendCandidatesToGoogleSheet, toTitleCase, MUSIC_MASTER_SHEET_ID, ROCK_POP_MASTER_SHEET_ID } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -65,28 +65,34 @@ function normalizeGrade(grade: string): string {
 
 function normalizeInstrument(inst: string, fallbackSuite?: string): { instrument: string; examType: string } {
   const clean = (inst || "").toLowerCase().trim();
+  const suiteLower = (fallbackSuite || "").toLowerCase();
+  const isExplicitRP = suiteLower.includes("rock") || suiteLower.includes("pop") || suiteLower.includes("r&p") || suiteLower.includes("rp");
+
   if (clean.includes("ekb") || clean.includes("electronic keyboard") || clean.includes("keyboard")) {
-    return { instrument: "Electronic Keyboard", examType: fallbackSuite || "Classical & Jazz" };
+    return { instrument: "Electronic Keyboard", examType: "Classical & Jazz" };
   }
   if (clean.includes("piano")) {
-    return { instrument: "Piano", examType: fallbackSuite || "Classical & Jazz" };
+    return { instrument: "Piano", examType: "Classical & Jazz" };
   }
   if (clean.includes("classical guitar")) {
-    return { instrument: "Classical Guitar", examType: fallbackSuite || "Classical & Jazz" };
+    return { instrument: "Classical Guitar", examType: "Classical & Jazz" };
+  }
+  if (clean.includes("electric guitar") || clean.includes("bass")) {
+    return { instrument: clean.includes("bass") ? "Bass" : "Electric Guitar", examType: "Rock & Pop" };
   }
   if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
-    return { instrument: "Acoustic Guitar", examType: fallbackSuite || "Rock & Pop" };
+    return { instrument: "Acoustic Guitar", examType: isExplicitRP ? "Rock & Pop" : "Classical & Jazz" };
   }
   if (clean.includes("drum")) {
-    return { instrument: "Drum Kit", examType: fallbackSuite || "Rock & Pop" };
+    return { instrument: "Drum Kit", examType: "Rock & Pop" };
   }
   if (clean.includes("vocal") || clean.includes("sing")) {
-    return { instrument: "Vocals", examType: fallbackSuite || "Rock & Pop" };
+    return { instrument: "Vocals", examType: "Rock & Pop" };
   }
   if (clean.includes("violin")) {
-    return { instrument: "Violin", examType: fallbackSuite || "Classical & Jazz" };
+    return { instrument: "Violin", examType: "Classical & Jazz" };
   }
-  return { instrument: inst ? inst.trim() : "Electronic Keyboard", examType: fallbackSuite || "Classical & Jazz" };
+  return { instrument: inst ? inst.trim() : "Electronic Keyboard", examType: isExplicitRP ? "Rock & Pop" : (fallbackSuite || "Classical & Jazz") };
 }
 
 function generateUuid(name: string): string {
@@ -168,7 +174,7 @@ async function resolveTeacher(
 
 export async function POST(req: Request) {
   try {
-    const { firstName, lastName, dob, examSuite, grade, subject, teacherName, schoolName, email, sessionMonth } = await req.json();
+    const { firstName, lastName, dob, gender, examSuite, grade, subject, teacherName, schoolName, email, sessionMonth } = await req.json();
 
     if (!firstName || !grade) {
       return NextResponse.json({ success: false, error: "First Name and Grade are required." }, { status: 400 });
@@ -180,6 +186,7 @@ export async function POST(req: Request) {
     const normGrade = normalizeGrade(grade);
     const { instrument, examType } = normalizeInstrument(subject, examSuite);
     const fee = getFeeForGrade(normGrade);
+    const candGender = (gender || "M").trim().toUpperCase().startsWith("F") ? "F" : "M";
 
     const teacherInfo = await resolveTeacher(teacherName, schoolName, email);
     const resolvedSchool = toTitleCase(teacherInfo.schoolName || schoolName || "");
@@ -229,17 +236,21 @@ export async function POST(req: Request) {
       }
     }).catch(err => console.warn("AuditLog warning:", err));
 
+    const targetSheetId = examType === "Rock & Pop" ? ROCK_POP_MASTER_SHEET_ID : MUSIC_MASTER_SHEET_ID;
+
     const sheetResult = await appendCandidatesToGoogleSheet({
       candidates: [{
         firstName: normFirstName,
         lastName: normLastName,
         dob: dob || "01/01/2000",
+        gender: candGender,
         grade: normGrade,
         instrument,
         examType,
         fee,
         email: resolvedEmail
       }],
+      targetSheetId,
       submitterName: teacherInfo.displayName,
       submitterEmail: resolvedEmail,
       schoolName: resolvedSchool
