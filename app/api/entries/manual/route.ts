@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { appendCandidatesToGoogleSheet } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -103,7 +104,7 @@ async function resolveTeacher(
   teacherName?: string | null,
   schoolName?: string | null,
   email?: string | null
-): Promise<{ teacherId: string; displayName: string }> {
+): Promise<{ teacherId: string; displayName: string; primaryEmail: string | null; schoolName: string | null }> {
   const conditions: any[] = [];
   if (email && email.includes("@")) {
     conditions.push({ primary_email: { equals: email.trim(), mode: "insensitive" } });
@@ -125,7 +126,12 @@ async function resolveTeacher(
       where: { OR: conditions }
     });
     if (teacher) {
-      return { teacherId: teacher.id, displayName: teacher.teacherName || teacher.name };
+      return { 
+        teacherId: teacher.id, 
+        displayName: teacher.teacherName || teacher.name,
+        primaryEmail: teacher.primary_email,
+        schoolName: teacher.schoolName
+      };
     }
   }
 
@@ -152,7 +158,12 @@ async function resolveTeacher(
     }
   });
 
-  return { teacherId: newTeacher.id, displayName: newTeacher.teacherName || newTeacher.name };
+  return { 
+    teacherId: newTeacher.id, 
+    displayName: newTeacher.teacherName || newTeacher.name,
+    primaryEmail: newTeacher.primary_email,
+    schoolName: newTeacher.schoolName
+  };
 }
 
 export async function POST(req: Request) {
@@ -169,7 +180,9 @@ export async function POST(req: Request) {
     const fee = getFeeForGrade(normGrade);
 
     // Resolve Teacher
-    const { teacherId, displayName } = await resolveTeacher(teacherName, schoolName, email);
+    const teacherInfo = await resolveTeacher(teacherName, schoolName, email);
+    const resolvedSchool = teacherInfo.schoolName || schoolName || "";
+    const resolvedEmail = teacherInfo.primaryEmail || email || "trinitykochi.ops.office@gmail.com";
 
     // Deterministic Candidate ID
     const candDeterministicId = generateUuid(
@@ -185,7 +198,7 @@ export async function POST(req: Request) {
         grade: normGrade,
         instrument,
         expectedFee: fee,
-        teacherId,
+        teacherId: teacherInfo.teacherId,
         sessionMonth: targetMonth,
         updatedAt: new Date()
       },
@@ -199,7 +212,7 @@ export async function POST(req: Request) {
         expectedFee: fee,
         paymentStatus: "Pending",
         status: "Active",
-        teacherId,
+        teacherId: teacherInfo.teacherId,
         sessionMonth: targetMonth,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -211,17 +224,37 @@ export async function POST(req: Request) {
         action: "UPSERT",
         tableName: "Candidate",
         recordId: candDeterministicId,
-        newValue: `Fee: ${fee}, Teacher: ${displayName} (${teacherId}), Month: ${targetMonth}`,
+        newValue: `Fee: ${fee}, Teacher: ${teacherInfo.displayName} (${teacherInfo.teacherId}), Month: ${targetMonth}`,
         description: `Manual Entry: ${firstName} ${lastName || ""} (${normGrade} ${instrument})`
       }
     }).catch(err => console.warn("AuditLog warning:", err));
 
-    const sheetOutput = `[Direct PostgreSQL Database Engine Active]\nCandidate: ${firstName} ${lastName || ""} | ${normGrade} ${instrument} (${examType}) : ₹${fee.toLocaleString("en-IN")}`;
-    const dbOutput = `Teacher/Academy: ${displayName} [ID: ${teacherId}]\nSession Month: ${targetMonth}\nExpected Fee: ₹${fee.toLocaleString("en-IN")}\nStatus: Successfully recorded in database!`;
+    // Append to Google Sheets
+    const sheetResult = await appendCandidatesToGoogleSheet({
+      candidates: [{
+        firstName: firstName.trim(),
+        lastName: (lastName || "").trim(),
+        dob: dob || "01/01/2000",
+        grade: normGrade,
+        instrument,
+        examType,
+        fee,
+        email: resolvedEmail
+      }],
+      submitterName: teacherInfo.displayName,
+      submitterEmail: resolvedEmail,
+      schoolName: resolvedSchool
+    });
+
+    const sheetOutput = sheetResult.success
+      ? `✅ Successfully appended candidate to Trinity ${sheetResult.sheetType} Master Google Sheet!\nCandidate: ${firstName} ${lastName || ""} | ${normGrade} ${instrument} (${examType}) : ₹${fee.toLocaleString("en-IN")}`
+      : `⚠️ Google Sheet status: ${sheetResult.error || "Sync pending"}\nCandidate: ${firstName} ${lastName || ""}`;
+
+    const dbOutput = `Teacher/Academy: ${teacherInfo.displayName} [ID: ${teacherInfo.teacherId}]\nSession Month: ${targetMonth}\nExpected Fee: ₹${fee.toLocaleString("en-IN")}\nDatabase: Successfully recorded in PostgreSQL!`;
 
     return NextResponse.json({
       success: true,
-      message: "Manual Entry successfully recorded in database!",
+      message: "Manual Entry successfully recorded in database and Google Sheet!",
       sheetOutput,
       dbOutput,
       candidate: {
@@ -231,7 +264,8 @@ export async function POST(req: Request) {
         instrument,
         examType,
         fee
-      }
+      },
+      sheetStatus: sheetResult
     });
 
   } catch (error: any) {
