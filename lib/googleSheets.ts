@@ -4,6 +4,7 @@ import path from "path";
 
 export const MUSIC_MASTER_SHEET_ID = "1o-c-nrvq-LoQYyvAmGBgxsNQ6X9hll52LC-APwYxcqE";
 export const ROCK_POP_MASTER_SHEET_ID = "1ee7cgY_YJjgTpMPtH7pQtVVDN1JWAjGlcONtqwae1VA";
+export const FORM_RESPONSES_SHEET_ID = "1OvS1YA9PVKCMCrATyRRsW3sYUIzO88X6UUqVOFakUt0";
 
 export function generateUuid(name: string): string {
   const hash = crypto.createHash("sha1").update(name).digest("hex");
@@ -146,6 +147,9 @@ export interface CandidateSheetRow {
   examType: string;
   fee: number;
   email?: string | null;
+  submitterName?: string | null;
+  submitterEmail?: string | null;
+  schoolName?: string | null;
 }
 
 export interface SheetAppendParams {
@@ -153,12 +157,13 @@ export interface SheetAppendParams {
   submitterName?: string | null;
   submitterEmail?: string | null;
   schoolName?: string | null;
+  targetSheetId?: string;
 }
 
 export async function appendCandidatesToGoogleSheet(
   params: SheetAppendParams
 ): Promise<{ success: boolean; rowsAppended: number; sheetType: string; error?: string }> {
-  const { candidates, submitterName, submitterEmail, schoolName } = params;
+  const { candidates, submitterName, submitterEmail, schoolName, targetSheetId } = params;
 
   if (!candidates || candidates.length === 0) {
     return { success: true, rowsAppended: 0, sheetType: "None" };
@@ -167,45 +172,47 @@ export async function appendCandidatesToGoogleSheet(
   try {
     const token = await getAccessToken();
 
-    const isRockAndPop = candidates.some(c => 
-      c.examType.toLowerCase().includes("rock") || 
-      ["drum", "drums", "drum kit", "vocals", "bass"].some(k => c.instrument.toLowerCase().includes(k))
-    );
+    const isRockAndPop = targetSheetId
+      ? targetSheetId === ROCK_POP_MASTER_SHEET_ID
+      : candidates.some(c => 
+          c.examType.toLowerCase().includes("rock") || 
+          ["drum", "drums", "drum kit", "vocals", "bass"].some(k => c.instrument.toLowerCase().includes(k))
+        );
 
-    const sheetId = isRockAndPop ? ROCK_POP_MASTER_SHEET_ID : MUSIC_MASTER_SHEET_ID;
+    const sheetId = targetSheetId || (isRockAndPop ? ROCK_POP_MASTER_SHEET_ID : MUSIC_MASTER_SHEET_ID);
     const sheetType = isRockAndPop ? "Rock & Pop" : "Music (Classical & Jazz)";
-
-    const subNameClean = toTitleCase(submitterName || "Teacher");
-    const subNameParts = subNameClean.split(/\s+/);
-    const subFirst = subNameParts[0] || "Teacher";
-    const subLast = subNameParts.slice(1).join(" ") || "";
-    const primarySubEmail = submitterEmail || "trinitykochi.ops.office@gmail.com";
-    const normSchool = schoolName ? toTitleCase(schoolName) : "";
 
     const rows = candidates.map(c => {
       const row = new Array(38).fill("");
-      const isRP = c.examType.toLowerCase().includes("rock");
+      const isRP = sheetId === ROCK_POP_MASTER_SHEET_ID || c.examType.toLowerCase().includes("rock");
       const suiteName = isRP ? "Rock and Pop (Digital)" : "Classical and Jazz (Digital)";
       const prodName = isRP 
         ? `Rock and Pop ${c.grade} (Digital)` 
         : `Classical and Jazz Technical ${c.grade} (Digital)`;
 
+      const cSubName = toTitleCase(c.submitterName || submitterName || "Teacher");
+      const cSubParts = cSubName.split(/\s+/);
+      const cSubFirst = cSubParts[0] || "Teacher";
+      const cSubLast = cSubParts.slice(1).join(" ") || "";
+      const cSubEmail = c.submitterEmail || submitterEmail || "trinitykochi.ops.office@gmail.com";
+      const cSchool = c.schoolName ? toTitleCase(c.schoolName) : (schoolName ? toTitleCase(schoolName) : "");
+
       row[1] = toTitleCase(c.firstName); // B: First Name (Proper Casing)
       row[3] = toTitleCase(c.lastName);  // D: Last Name (Proper Casing)
       row[4] = c.dob || "01/01/2000"; // E: DOB
-      row[5] = c.email || primarySubEmail; // F: Candidate Email
+      row[5] = c.email || cSubEmail; // F: Candidate Email
       row[13] = suiteName; // N: Exam Suite
       row[14] = prodName; // O: Product Name
       row[15] = c.instrument; // P: Subject
       row[17] = "N"; // R: Submitter same as candidate
-      row[18] = subFirst; // S: Submitter First Name
-      row[19] = subLast; // T: Submitter Last Name
-      row[20] = primarySubEmail; // U: Submitter Email
+      row[18] = cSubFirst; // S: Submitter First Name
+      row[19] = cSubLast; // T: Submitter Last Name
+      row[20] = cSubEmail; // U: Submitter Email
       row[24] = "N"; // Y: Applicant same as candidate
-      row[25] = subNameClean; // Z: Applicant Name
+      row[25] = cSubName; // Z: Applicant Name
       row[26] = "Y"; // AA: Consent Received
-      row[27] = normSchool; // AB: School Name
-      row[28] = normSchool ? "Y" : "N"; // AC: School on cert
+      row[27] = cSchool; // AB: School Name
+      row[28] = cSchool ? "Y" : "N"; // AC: School on cert
       row[34] = "Government ID Card"; // AI: ID Doc Type
       row[35] = "XXXXXXXXXXX"; // AJ: ID Doc Number
       row[36] = "India"; // AK: Nationality
