@@ -4,7 +4,12 @@ import crypto from "crypto";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { appendCandidatesToGoogleSheet, toTitleCase } from "@/lib/googleSheets";
+import { 
+  appendCandidatesToGoogleSheet, 
+  toTitleCase,
+  MUSIC_MASTER_SHEET_ID,
+  ROCK_POP_MASTER_SHEET_ID
+} from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -17,6 +22,8 @@ const pool = new Pool({
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
+
+const GENERIC_EMAILS = ["trinitykochi.ops.office@gmail.com"];
 
 const FEE_MAP: Record<string, number> = {
   "initial": 5500,
@@ -52,7 +59,7 @@ function getFeeForGrade(grade: string): number {
 function normalizeGrade(grade: string): string {
   if (!grade) return "Grade 1";
   const clean = grade.toLowerCase().trim();
-  if (clean.includes("init") || clean === "in") return "Initial";
+  if (clean === "initial" || clean === "in" || clean.includes("initial")) return "Initial";
   if (clean.includes("one") || clean.includes("1")) return "Grade 1";
   if (clean.includes("two") || clean.includes("2")) return "Grade 2";
   if (clean.includes("three") || clean.includes("3")) return "Grade 3";
@@ -64,30 +71,41 @@ function normalizeGrade(grade: string): string {
   return grade.trim();
 }
 
-function normalizeInstrument(inst: string): { instrument: string; examType: string } {
+function normalizeInstrument(inst: string, explicitSuite?: string): { instrument: string; examType: string } {
   const clean = (inst || "").toLowerCase().trim();
+  const suiteLower = (explicitSuite || "").toLowerCase().trim();
+
+  let examType = "Classical & Jazz";
+  if (suiteLower.includes("rock") || suiteLower.includes("pop") || suiteLower.includes("r&p") || suiteLower.includes("rp")) {
+    examType = "Rock & Pop";
+  } else if (suiteLower.includes("classical") || suiteLower.includes("jazz")) {
+    examType = "Classical & Jazz";
+  } else if (clean.includes("drum") || (clean.includes("vocal") && clean.includes("rock")) || clean.includes("bass")) {
+    examType = "Rock & Pop";
+  }
+
+  let instrument = "Electronic Keyboard";
   if (clean.includes("ekb") || clean.includes("electronic keyboard") || clean.includes("keyboard")) {
-    return { instrument: "Electronic Keyboard", examType: "Classical & Jazz" };
+    instrument = "Electronic Keyboard";
+  } else if (clean.includes("piano")) {
+    instrument = "Piano";
+  } else if (clean.includes("classical guitar")) {
+    instrument = "Classical Guitar";
+  } else if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
+    instrument = "Acoustic Guitar";
+  } else if (clean.includes("drum")) {
+    instrument = "Drum Kit";
+  } else if (clean.includes("vocal") || clean.includes("sing")) {
+    instrument = "Vocals";
+  } else if (clean.includes("violin")) {
+    instrument = "Violin";
+  } else if (clean.includes("sax")) {
+    instrument = "Saxophone";
+  } else if (inst) {
+    instrument = toTitleCase(inst.trim());
   }
-  if (clean.includes("piano")) {
-    return { instrument: "Piano", examType: "Classical & Jazz" };
-  }
-  if (clean.includes("classical guitar")) {
-    return { instrument: "Classical Guitar", examType: "Classical & Jazz" };
-  }
-  if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
-    return { instrument: "Acoustic Guitar", examType: "Rock & Pop" };
-  }
-  if (clean.includes("drum")) {
-    return { instrument: "Drum Kit", examType: "Rock & Pop" };
-  }
-  if (clean.includes("vocal") || clean.includes("sing")) {
-    return { instrument: "Vocals", examType: "Rock & Pop" };
-  }
-  if (clean.includes("violin")) {
-    return { instrument: "Violin", examType: "Classical & Jazz" };
-  }
-  return { instrument: inst ? inst.trim() : "Electronic Keyboard", examType: "Classical & Jazz" };
+
+  return { instrument, examType };
 }
 
 function parseProduct(prodName: string, fallbackSubj?: string): { grade: string; instrument: string } {
@@ -135,9 +153,13 @@ function generateUuid(name: string): string {
 
 async function resolveTeacher(
   teacherName?: string | null,
-  schoolName?: string | null
+  schoolName?: string | null,
+  email?: string | null
 ): Promise<{ teacherId: string; displayName: string; primaryEmail: string | null; schoolName: string | null }> {
   const conditions: any[] = [];
+  if (email && email.includes("@") && !GENERIC_EMAILS.includes(email.toLowerCase().trim())) {
+    conditions.push({ primary_email: { equals: email.trim(), mode: "insensitive" } });
+  }
   if (teacherName && teacherName.trim()) {
     const s = teacherName.trim();
     conditions.push({ teacherName: { contains: s, mode: "insensitive" } });
@@ -165,21 +187,25 @@ async function resolveTeacher(
   }
 
   const primaryName = toTitleCase(teacherName?.trim() || schoolName?.trim() || "Excel Upload Teacher");
-  const uniqueKey = `NAME:${primaryName.toLowerCase()}`;
+  const uniqueKey = (email && email.includes("@") && !GENERIC_EMAILS.includes(email.toLowerCase().trim()))
+    ? `EMAIL:${email.toLowerCase().trim()}`
+    : `NAME:${primaryName.toLowerCase()}`;
   
   const newId = generateUuid(uniqueKey);
   const newTeacher = await prisma.teacherAcademy.upsert({
     where: { uniqueKey },
     update: {
       teacherName: teacherName?.trim() ? toTitleCase(teacherName.trim()) : undefined,
-      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : undefined
+      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : undefined,
+      primary_email: email && !GENERIC_EMAILS.includes(email.toLowerCase().trim()) ? email.trim() : undefined
     },
     create: {
       id: newId,
       uniqueKey,
       name: primaryName,
       teacherName: teacherName?.trim() ? toTitleCase(teacherName.trim()) : null,
-      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : null
+      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : null,
+      primary_email: email && !GENERIC_EMAILS.includes(email.toLowerCase().trim()) ? email.trim() : null
     }
   });
 
@@ -221,26 +247,32 @@ export async function POST(req: Request) {
     let lnCol = -1;
     let singleNameCol = -1;
     let dobCol = -1;
+    let suiteCol = -1;
     let prodCol = -1;
     let gradeCol = -1;
     let subjCol = -1;
+    let emailCol = -1;
     let schoolCol = -1;
+    let teacherCol = -1;
     let submitterCol = -1;
 
     for (let r = 0; r < Math.min(rows.length, 15); r++) {
       const row = rows[r].map(c => String(c || "").trim().toLowerCase());
       for (let c = 0; c < row.length; c++) {
         const val = row[c];
-        if (val === "first name") fnCol = c;
-        else if (val === "last name") lnCol = c;
+        if (fnCol === -1 && (val === "first name" || val.includes("first name"))) fnCol = c;
+        else if (lnCol === -1 && (val.includes("last name") || val.includes("middle & last") || val.includes("middle and last") || val === "surname")) lnCol = c;
         else if (singleNameCol === -1 && (val === "name" || val === "candidate name" || val === "student name")) singleNameCol = c;
 
         if (dobCol === -1 && (val.includes("dob") || val.includes("birth") || val.includes("date of birth"))) dobCol = c;
+        if (suiteCol === -1 && (val.includes("exam suite") || val.includes("suite"))) suiteCol = c;
         if (prodCol === -1 && (val.includes("product") || val.includes("examination"))) prodCol = c;
         if (gradeCol === -1 && (val === "grade" || val === "exam level")) gradeCol = c;
         if (subjCol === -1 && (val.includes("subject") || val.includes("instrument"))) subjCol = c;
-        if (schoolCol === -1 && (val.includes("school") || val.includes("academy"))) schoolCol = c;
-        if (submitterCol === -1 && (val.includes("submitter") || val.includes("applicant") || val.includes("teacher"))) submitterCol = c;
+        if (emailCol === -1 && (val.includes("submitter email") || val.includes("email id") || val === "email")) emailCol = c;
+        if (schoolCol === -1 && (val.includes("school") || val.includes("academy") || val.includes("institute"))) schoolCol = c;
+        if (teacherCol === -1 && (val.includes("teacher name") || val === "teacher")) teacherCol = c;
+        if (submitterCol === -1 && (val.includes("applicant name") || val === "applicant" || val.includes("submitter name"))) submitterCol = c;
       }
 
       if ((fnCol !== -1 || singleNameCol !== -1) && (prodCol !== -1 || gradeCol !== -1 || subjCol !== -1)) {
@@ -252,10 +284,15 @@ export async function POST(req: Request) {
     if (headerRowIdx === -1) {
       headerRowIdx = 0;
       fnCol = 1;
-      lnCol = 3;
-      prodCol = 14;
-      subjCol = 15;
-      dobCol = 4;
+      lnCol = 2;
+      dobCol = 3;
+      suiteCol = 6;
+      subjCol = 8;
+      gradeCol = 9;
+      submitterCol = 10;
+      teacherCol = 11;
+      schoolCol = 12;
+      emailCol = 5;
     }
 
     // Detect teacher from top rows or filename
@@ -316,6 +353,7 @@ export async function POST(req: Request) {
       const prodVal = prodCol !== -1 ? String(row[prodCol] || "").trim() : "";
       const gradeVal = gradeCol !== -1 ? String(row[gradeCol] || "").trim() : "";
       const subjVal = subjCol !== -1 ? String(row[subjCol] || "").trim() : "";
+      const suiteVal = suiteCol !== -1 ? String(row[suiteCol] || "").trim() : "";
 
       if (!prodVal && !gradeVal && !subjVal) continue;
 
@@ -328,11 +366,14 @@ export async function POST(req: Request) {
       }
 
       // Check row-level teacher or school
-      let currentTeacher = defaultTeacherInfo;
-      const rowTeacher = submitterCol !== -1 && row[submitterCol] ? String(row[submitterCol]).trim() : "";
+      const rowTeacher = (teacherCol !== -1 && row[teacherCol] ? String(row[teacherCol]).trim() : "") ||
+                         (submitterCol !== -1 && row[submitterCol] ? String(row[submitterCol]).trim() : "");
       const rowSchool = schoolCol !== -1 && row[schoolCol] ? String(row[schoolCol]).trim() : "";
-      if (rowTeacher || rowSchool) {
-        currentTeacher = await resolveTeacher(rowTeacher || detectedTeacherName, rowSchool || detectedSchoolName);
+      const rowEmail = emailCol !== -1 && row[emailCol] ? String(row[emailCol]).trim() : "";
+
+      let currentTeacher = defaultTeacherInfo;
+      if (rowTeacher || rowSchool || rowEmail) {
+        currentTeacher = await resolveTeacher(rowTeacher || detectedTeacherName, rowSchool || detectedSchoolName, rowEmail);
       }
 
       // DOB
@@ -341,15 +382,30 @@ export async function POST(req: Request) {
         const dVal = row[dobCol];
         if (dVal instanceof Date) {
           dobStr = `${String(dVal.getDate()).padStart(2, "0")}/${String(dVal.getMonth() + 1).padStart(2, "0")}/${dVal.getFullYear()}`;
+        } else if (typeof dVal === "number") {
+          const parsedDate = xlsx.SSF.parse_date_code(dVal);
+          if (parsedDate) {
+            dobStr = `${String(parsedDate.d).padStart(2, "0")}/${String(parsedDate.m).padStart(2, "0")}/${parsedDate.y}`;
+          }
         } else if (typeof dVal === "string" && dVal.trim()) {
-          dobStr = dVal.trim();
+          const cleanDob = dVal.trim();
+          const m = cleanDob.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+          if (m) {
+            let day = m[1].padStart(2, "0");
+            let month = m[2].padStart(2, "0");
+            let year = m[3];
+            if (year.length === 2) year = "20" + year;
+            dobStr = `${day}/${month}/${year}`;
+          } else {
+            dobStr = cleanDob;
+          }
         }
       }
 
       const normFirstName = toTitleCase(rawFirstName);
       const normLastName = toTitleCase(rawLastName);
       const normGrade = normalizeGrade(extractedGrade);
-      const { instrument, examType } = normalizeInstrument(extractedSubj);
+      const { instrument, examType } = normalizeInstrument(extractedSubj, suiteVal);
       const fee = getFeeForGrade(normGrade);
       totalFee += fee;
 
@@ -406,7 +462,11 @@ export async function POST(req: Request) {
         grade: normGrade,
         instrument,
         examType,
-        fee
+        fee,
+        email: rowEmail || currentTeacher.primaryEmail,
+        submitterName: currentTeacher.displayName,
+        submitterEmail: currentTeacher.primaryEmail || "trinitykochi.ops.office@gmail.com",
+        schoolName: currentTeacher.schoolName || detectedSchoolName || ""
       });
     }
 
@@ -417,21 +477,40 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // 3. Append to Trinity Master Google Sheets
-    const sheetResult = await appendCandidatesToGoogleSheet({
-      candidates: processedCandidates,
-      submitterName: defaultTeacherInfo.displayName,
-      submitterEmail: defaultTeacherInfo.primaryEmail || "trinitykochi.ops.office@gmail.com",
-      schoolName: defaultTeacherInfo.schoolName || detectedSchoolName || ""
-    });
+    // 3. Partition and Append to Correct Trinity Master Google Sheets
+    const musicCands = processedCandidates.filter(c => c.examType !== "Rock & Pop");
+    const rpCands = processedCandidates.filter(c => c.examType === "Rock & Pop");
+
+    let musicAppended = 0;
+    let rpAppended = 0;
+
+    if (musicCands.length > 0) {
+      const res = await appendCandidatesToGoogleSheet({
+        candidates: musicCands,
+        targetSheetId: MUSIC_MASTER_SHEET_ID,
+        submitterName: defaultTeacherInfo.displayName,
+        schoolName: defaultTeacherInfo.schoolName || detectedSchoolName || "",
+        submitterEmail: defaultTeacherInfo.primaryEmail || "trinitykochi.ops.office@gmail.com"
+      });
+      if (res.success) musicAppended = res.rowsAppended;
+    }
+
+    if (rpCands.length > 0) {
+      const res = await appendCandidatesToGoogleSheet({
+        candidates: rpCands,
+        targetSheetId: ROCK_POP_MASTER_SHEET_ID,
+        submitterName: defaultTeacherInfo.displayName,
+        schoolName: defaultTeacherInfo.schoolName || detectedSchoolName || "",
+        submitterEmail: defaultTeacherInfo.primaryEmail || "trinitykochi.ops.office@gmail.com"
+      });
+      if (res.success) rpAppended = res.rowsAppended;
+    }
 
     const candidateLines = processedCandidates.map(
       (c, idx) => `${idx + 1}. ${c.name} - ${c.grade} ${c.instrument} (${c.examType}) : ₹${c.fee.toLocaleString("en-IN")}`
     ).join("\n");
 
-    const sheetOutput = sheetResult.success
-      ? `✅ Successfully appended ${sheetResult.rowsAppended} candidate(s) to Trinity ${sheetResult.sheetType} Master Google Sheet!\n\n${candidateLines}`
-      : `⚠️ Google Sheet status: ${sheetResult.error || "Sync pending"}\n\n${candidateLines}`;
+    const sheetOutput = `✅ Successfully appended ${musicAppended + rpAppended} candidate(s) to Master Google Sheet(s)!\n- Classical & Jazz: ${musicAppended} rows\n- Rock & Pop: ${rpAppended} rows\n\n${candidateLines}`;
 
     const dbOutput = `Teacher/Academy: ${defaultTeacherInfo.displayName} [ID: ${defaultTeacherInfo.teacherId}]\nSession Month: ${sessionMonth}\nTotal Candidates: ${processedCandidates.length}\nTotal Expected Fees: ₹${totalFee.toLocaleString("en-IN")}\nDatabase: Successfully recorded in PostgreSQL!`;
 
@@ -443,7 +522,7 @@ export async function POST(req: Request) {
       candidates: processedCandidates,
       totalFee,
       teacher: defaultTeacherInfo.displayName,
-      sheetStatus: sheetResult
+      count: processedCandidates.length
     });
 
   } catch (error: any) {
