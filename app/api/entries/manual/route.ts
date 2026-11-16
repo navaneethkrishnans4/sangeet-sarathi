@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { appendCandidatesToGoogleSheet } from "@/lib/googleSheets";
+import { appendCandidatesToGoogleSheet, toTitleCase } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -135,7 +135,7 @@ async function resolveTeacher(
     }
   }
 
-  const primaryName = teacherName?.trim() || schoolName?.trim() || "Direct Entry";
+  const primaryName = toTitleCase(teacherName?.trim() || schoolName?.trim() || "Direct Entry");
   const uniqueKey = email?.trim() 
     ? `EMAIL:${email.trim().toLowerCase()}` 
     : `NAME:${primaryName.toLowerCase()}`;
@@ -144,16 +144,16 @@ async function resolveTeacher(
   const newTeacher = await prisma.teacherAcademy.upsert({
     where: { uniqueKey },
     update: {
-      teacherName: teacherName?.trim() || undefined,
-      schoolName: schoolName?.trim() || undefined,
+      teacherName: teacherName?.trim() ? toTitleCase(teacherName.trim()) : undefined,
+      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : undefined,
       primary_email: email?.trim() || undefined
     },
     create: {
       id: newId,
       uniqueKey,
       name: primaryName,
-      teacherName: teacherName?.trim() || null,
-      schoolName: schoolName?.trim() || null,
+      teacherName: teacherName?.trim() ? toTitleCase(teacherName.trim()) : null,
+      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : null,
       primary_email: email?.trim() || null
     }
   });
@@ -175,25 +175,25 @@ export async function POST(req: Request) {
     }
 
     const targetMonth = sessionMonth || "November";
+    const normFirstName = toTitleCase(firstName);
+    const normLastName = toTitleCase(lastName || "");
     const normGrade = normalizeGrade(grade);
     const { instrument, examType } = normalizeInstrument(subject, examSuite);
     const fee = getFeeForGrade(normGrade);
 
-    // Resolve Teacher
     const teacherInfo = await resolveTeacher(teacherName, schoolName, email);
-    const resolvedSchool = teacherInfo.schoolName || schoolName || "";
+    const resolvedSchool = toTitleCase(teacherInfo.schoolName || schoolName || "");
     const resolvedEmail = teacherInfo.primaryEmail || email || "trinitykochi.ops.office@gmail.com";
 
-    // Deterministic Candidate ID
     const candDeterministicId = generateUuid(
-      `${firstName.trim()}-${(lastName || "").trim()}-${examType}-${normGrade}-${instrument}`.toLowerCase().trim()
+      `${normFirstName}-${normLastName}-${examType}-${normGrade}-${instrument}`.toLowerCase().trim()
     );
 
     await prisma.candidate.upsert({
       where: { id: candDeterministicId },
       update: {
-        firstName: firstName.trim(),
-        lastName: (lastName || "").trim(),
+        firstName: normFirstName,
+        lastName: normLastName,
         examType,
         grade: normGrade,
         instrument,
@@ -204,8 +204,8 @@ export async function POST(req: Request) {
       },
       create: {
         id: candDeterministicId,
-        firstName: firstName.trim(),
-        lastName: (lastName || "").trim(),
+        firstName: normFirstName,
+        lastName: normLastName,
         examType,
         grade: normGrade,
         instrument,
@@ -225,15 +225,14 @@ export async function POST(req: Request) {
         tableName: "Candidate",
         recordId: candDeterministicId,
         newValue: `Fee: ${fee}, Teacher: ${teacherInfo.displayName} (${teacherInfo.teacherId}), Month: ${targetMonth}`,
-        description: `Manual Entry: ${firstName} ${lastName || ""} (${normGrade} ${instrument})`
+        description: `Manual Entry: ${normFirstName} ${normLastName} (${normGrade} ${instrument})`
       }
     }).catch(err => console.warn("AuditLog warning:", err));
 
-    // Append to Google Sheets
     const sheetResult = await appendCandidatesToGoogleSheet({
       candidates: [{
-        firstName: firstName.trim(),
-        lastName: (lastName || "").trim(),
+        firstName: normFirstName,
+        lastName: normLastName,
         dob: dob || "01/01/2000",
         grade: normGrade,
         instrument,
@@ -247,8 +246,8 @@ export async function POST(req: Request) {
     });
 
     const sheetOutput = sheetResult.success
-      ? `✅ Successfully appended candidate to Trinity ${sheetResult.sheetType} Master Google Sheet!\nCandidate: ${firstName} ${lastName || ""} | ${normGrade} ${instrument} (${examType}) : ₹${fee.toLocaleString("en-IN")}`
-      : `⚠️ Google Sheet status: ${sheetResult.error || "Sync pending"}\nCandidate: ${firstName} ${lastName || ""}`;
+      ? `✅ Successfully appended candidate to Trinity ${sheetResult.sheetType} Master Google Sheet!\nCandidate: ${normFirstName} ${normLastName} | ${normGrade} ${instrument} (${examType}) : ₹${fee.toLocaleString("en-IN")}`
+      : `⚠️ Google Sheet status: ${sheetResult.error || "Sync pending"}\nCandidate: ${normFirstName} ${normLastName}`;
 
     const dbOutput = `Teacher/Academy: ${teacherInfo.displayName} [ID: ${teacherInfo.teacherId}]\nSession Month: ${targetMonth}\nExpected Fee: ₹${fee.toLocaleString("en-IN")}\nDatabase: Successfully recorded in PostgreSQL!`;
 
@@ -259,7 +258,7 @@ export async function POST(req: Request) {
       dbOutput,
       candidate: {
         id: candDeterministicId,
-        name: `${firstName} ${lastName || ""}`.trim(),
+        name: `${normFirstName} ${normLastName}`.trim(),
         grade: normGrade,
         instrument,
         examType,

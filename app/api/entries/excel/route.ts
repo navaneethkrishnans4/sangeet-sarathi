@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { appendCandidatesToGoogleSheet } from "@/lib/googleSheets";
+import { appendCandidatesToGoogleSheet, toTitleCase } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -98,11 +98,11 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
     .trim();
   const parts = cleaned.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { firstName: "Unknown", lastName: "" };
-  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
-  if (parts.length === 2) return { firstName: parts[0], lastName: parts[1] };
+  if (parts.length === 1) return { firstName: toTitleCase(parts[0]), lastName: "" };
+  if (parts.length === 2) return { firstName: toTitleCase(parts[0]), lastName: toTitleCase(parts[1]) };
   return {
-    firstName: parts.slice(0, parts.length - 1).join(" "),
-    lastName: parts[parts.length - 1]
+    firstName: toTitleCase(parts.slice(0, parts.length - 1).join(" ")),
+    lastName: toTitleCase(parts[parts.length - 1])
   };
 }
 
@@ -148,22 +148,22 @@ async function resolveTeacher(
     }
   }
 
-  const primaryName = teacherName?.trim() || schoolName?.trim() || "Excel Upload Teacher";
+  const primaryName = toTitleCase(teacherName?.trim() || schoolName?.trim() || "Excel Upload Teacher");
   const uniqueKey = `NAME:${primaryName.toLowerCase()}`;
   
   const newId = generateUuid(uniqueKey);
   const newTeacher = await prisma.teacherAcademy.upsert({
     where: { uniqueKey },
     update: {
-      teacherName: teacherName?.trim() || undefined,
-      schoolName: schoolName?.trim() || undefined
+      teacherName: teacherName?.trim() ? toTitleCase(teacherName.trim()) : undefined,
+      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : undefined
     },
     create: {
       id: newId,
       uniqueKey,
       name: primaryName,
-      teacherName: teacherName?.trim() || null,
-      schoolName: schoolName?.trim() || null
+      teacherName: teacherName?.trim() ? toTitleCase(teacherName.trim()) : null,
+      schoolName: schoolName?.trim() ? toTitleCase(schoolName.trim()) : null
     }
   });
 
@@ -347,7 +347,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Append to Google Sheets
     const sheetResult = await appendCandidatesToGoogleSheet({
       candidates: processedCandidates,
       submitterName: teacherInfo.displayName,

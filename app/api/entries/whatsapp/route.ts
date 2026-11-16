@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { appendCandidatesToGoogleSheet } from "@/lib/googleSheets";
+import { appendCandidatesToGoogleSheet, toTitleCase } from "@/lib/googleSheets";
 
 export const maxDuration = 120;
 
@@ -98,11 +98,11 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
     .trim();
   const parts = cleaned.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { firstName: "Unknown", lastName: "" };
-  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
-  if (parts.length === 2) return { firstName: parts[0], lastName: parts[1] };
+  if (parts.length === 1) return { firstName: toTitleCase(parts[0]), lastName: "" };
+  if (parts.length === 2) return { firstName: toTitleCase(parts[0]), lastName: toTitleCase(parts[1]) };
   return {
-    firstName: parts.slice(0, parts.length - 1).join(" "),
-    lastName: parts[parts.length - 1]
+    firstName: toTitleCase(parts.slice(0, parts.length - 1).join(" ")),
+    lastName: toTitleCase(parts[parts.length - 1])
   };
 }
 
@@ -141,7 +141,7 @@ async function extractWithGemini(rawText: string): Promise<ExtractedData | null>
 Standardize:
 - grade: format as 'Grade 1', 'Grade 2', 'Initial', 'Grade 3', etc.
 - instrument: 'Electronic Keyboard' for EKB/keyboard, 'Piano', 'Acoustic Guitar', 'Drum Kit', 'Violin', 'Classical Guitar', etc.
-- firstName and lastName: split student full name properly. If single word or initials, split reasonably (e.g., 'THEJUS V' and 'NAIR').
+- firstName and lastName: split student full name properly and format with Proper Casing (e.g. 'Thejus V' and 'Nair', 'Parthiv' and 'Pradeep'). Single letter initials must stay uppercase (e.g. 'V', 'K', 'A', 'N').
 - dob: DD/MM/YYYY.
 - submitterName: extracted submitter/teacher name.
 - academyName: extracted academy/music school name.
@@ -305,8 +305,7 @@ async function resolveTeacher(
     }
   }
 
-  // If no match found, create a new teacher record
-  const primaryName = submitterName?.trim() || academyName?.trim() || "Unknown Teacher";
+  const primaryName = toTitleCase(submitterName?.trim() || academyName?.trim() || "Unknown Teacher");
   const uniqueKey = email?.trim() 
     ? `EMAIL:${email.trim().toLowerCase()}` 
     : `NAME:${primaryName.toLowerCase()}`;
@@ -315,16 +314,16 @@ async function resolveTeacher(
   const newTeacher = await prisma.teacherAcademy.upsert({
     where: { uniqueKey },
     update: {
-      teacherName: submitterName?.trim() || undefined,
-      schoolName: academyName?.trim() || undefined,
+      teacherName: submitterName?.trim() ? toTitleCase(submitterName.trim()) : undefined,
+      schoolName: academyName?.trim() ? toTitleCase(academyName.trim()) : undefined,
       primary_email: email?.trim() || undefined
     },
     create: {
       id: newId,
       uniqueKey,
       name: primaryName,
-      teacherName: submitterName?.trim() || null,
-      schoolName: academyName?.trim() || null,
+      teacherName: submitterName?.trim() ? toTitleCase(submitterName.trim()) : null,
+      schoolName: academyName?.trim() ? toTitleCase(academyName.trim()) : null,
       primary_email: email?.trim() || null
     }
   });
@@ -347,7 +346,6 @@ export async function POST(req: Request) {
 
     const targetMonth = sessionMonth || "November";
 
-    // 1. Extract candidates (Gemini with fallback to Regex)
     let extracted = await extractWithGemini(text);
     if (!extracted || !extracted.candidates || extracted.candidates.length === 0) {
       extracted = extractWithRegex(text);
@@ -360,34 +358,34 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // 2. Resolve Teacher / Academy
     const { teacherId, displayName, primaryEmail, schoolName } = await resolveTeacher(
       extracted.submitterName,
       extracted.academyName
     );
 
-    const resolvedSchool = schoolName || extracted.academyName || "";
+    const resolvedSchool = toTitleCase(schoolName || extracted.academyName || "");
     const resolvedEmail = primaryEmail || "trinitykochi.ops.office@gmail.com";
 
-    // 3. Process & Upsert Candidates into PostgreSQL
     let totalFee = 0;
     const processedCandidates: any[] = [];
 
     for (const cand of extracted.candidates) {
+      const normFirstName = toTitleCase(cand.firstName);
+      const normLastName = toTitleCase(cand.lastName);
       const normGrade = normalizeGrade(cand.grade);
       const { instrument, examType } = normalizeInstrument(cand.instrument);
       const fee = getFeeForGrade(normGrade);
       totalFee += fee;
 
       const candDeterministicId = generateUuid(
-        `${cand.firstName}-${cand.lastName}-${examType}-${normGrade}-${instrument}`.toLowerCase().trim()
+        `${normFirstName}-${normLastName}-${examType}-${normGrade}-${instrument}`.toLowerCase().trim()
       );
 
       await prisma.candidate.upsert({
         where: { id: candDeterministicId },
         update: {
-          firstName: cand.firstName.trim(),
-          lastName: cand.lastName.trim(),
+          firstName: normFirstName,
+          lastName: normLastName,
           examType,
           grade: normGrade,
           instrument,
@@ -398,8 +396,8 @@ export async function POST(req: Request) {
         },
         create: {
           id: candDeterministicId,
-          firstName: cand.firstName.trim(),
-          lastName: cand.lastName.trim(),
+          firstName: normFirstName,
+          lastName: normLastName,
           examType,
           grade: normGrade,
           instrument,
@@ -420,15 +418,15 @@ export async function POST(req: Request) {
           tableName: "Candidate",
           recordId: candDeterministicId,
           newValue: `Fee: ${fee}, Teacher: ${displayName} (${teacherId}), Month: ${targetMonth}`,
-          description: `WhatsApp Entry: ${cand.firstName} ${cand.lastName} (${normGrade} ${instrument})`
+          description: `WhatsApp Entry: ${normFirstName} ${normLastName} (${normGrade} ${instrument})`
         }
       }).catch(err => console.warn("AuditLog warning:", err));
 
       processedCandidates.push({
         id: candDeterministicId,
-        firstName: cand.firstName.trim(),
-        lastName: cand.lastName.trim(),
-        name: `${cand.firstName} ${cand.lastName}`,
+        firstName: normFirstName,
+        lastName: normLastName,
+        name: `${normFirstName} ${normLastName}`,
         dob: cand.dob || "01/01/2000",
         grade: normGrade,
         instrument,
@@ -438,7 +436,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // 4. Synchronize with Trinity Master Google Sheet
+    // Append to Google Sheets
     const sheetResult = await appendCandidatesToGoogleSheet({
       candidates: processedCandidates,
       submitterName: displayName,
