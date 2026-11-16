@@ -142,6 +142,7 @@ export interface CandidateSheetRow {
   firstName: string;
   lastName: string;
   dob?: string;
+  gender?: string | null;
   grade: string;
   instrument: string;
   examType: string;
@@ -201,6 +202,7 @@ export async function appendCandidatesToGoogleSheet(
       row[3] = toTitleCase(c.lastName);  // D: Last Name (Proper Casing)
       row[4] = c.dob || "01/01/2000"; // E: DOB
       row[5] = c.email || cSubEmail; // F: Candidate Email
+      row[9] = (c.gender || "M").trim().toUpperCase().startsWith("F") ? "F" : "M"; // J: Gender (M / F)
       row[13] = suiteName; // N: Exam Suite
       row[14] = prodName; // O: Product Name
       row[15] = c.instrument; // P: Subject
