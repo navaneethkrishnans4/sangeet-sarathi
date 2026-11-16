@@ -2,8 +2,21 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 
-const MUSIC_MASTER_SHEET_ID = "1o-c-nrvq-LoQYyvAmGBgxsNQ6X9hll52LC-APwYxcqE";
-const ROCK_POP_MASTER_SHEET_ID = "1ee7cgY_YJjgTpMPtH7pQtVVDN1JWAjGlcONtqwae1VA";
+export const MUSIC_MASTER_SHEET_ID = "1o-c-nrvq-LoQYyvAmGBgxsNQ6X9hll52LC-APwYxcqE";
+export const ROCK_POP_MASTER_SHEET_ID = "1ee7cgY_YJjgTpMPtH7pQtVVDN1JWAjGlcONtqwae1VA";
+
+export function generateUuid(name: string): string {
+  const hash = crypto.createHash("sha1").update(name).digest("hex");
+  return [
+    hash.substring(0, 8),
+    hash.substring(8, 12),
+    "5" + hash.substring(13, 16),
+    ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80).toString(16) + hash.substring(18, 20),
+    hash.substring(20, 32)
+  ].join("-");
+}
+
+export const uuidv5 = generateUuid;
 
 export function toTitleCase(str: string): string {
   if (!str) return "";
@@ -63,9 +76,9 @@ function getCredentials(): { client_email: string; private_key: string } {
     path.join(process.cwd(), "credentials.json")
   ];
   for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ p)) {
       try {
-        const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
+        const raw = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ p, "utf-8"));
         if (raw.client_email && raw.private_key) {
           return raw;
         }
@@ -235,3 +248,21 @@ export async function appendCandidatesToGoogleSheet(
     };
   }
 }
+
+export async function readGoogleSheetRows(
+  sheetId: string,
+  range: string = "'Enrolment Sheet'!A:AL"
+): Promise<string[][]> {
+  const token = await getAccessToken();
+  const encodedRange = encodeURIComponent(range);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodedRange}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (data.error) {
+    throw new Error(data.error.message || "Failed to read Google Sheet");
+  }
+  return data.values || [];
+}
+
