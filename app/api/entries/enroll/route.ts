@@ -148,17 +148,24 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const {
+      teacherName,
+      defaultTeacherName,
+      schoolName,
+      defaultSchoolName,
       submitterName,
       submitterMobile,
       submitterEmail,
-      defaultSchoolName,
-      defaultTeacherName,
       candidates,
       paymentScreenshotBase64,
       paymentScreenshotFileName,
       paymentRefNote,
       sessionMonth
     } = body;
+
+    const effTeacher = (teacherName || defaultTeacherName || "").trim();
+    if (!effTeacher) {
+      return NextResponse.json({ success: false, error: "Teacher Name is required in contact details." }, { status: 400 });
+    }
 
     if (!submitterName || !submitterName.trim()) {
       return NextResponse.json({ success: false, error: "Submitter / Applicant name is required." }, { status: 400 });
@@ -172,6 +179,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Please add at least one candidate." }, { status: 400 });
     }
 
+    const effSchool = (schoolName || defaultSchoolName || "").trim();
     const targetMonth = sessionMonth || "December";
     const cleanSubName = toTitleCase(submitterName.trim());
     const cleanSubEmail = (submitterEmail || "").trim() || "trinitykochi.ops.office@gmail.com";
@@ -220,8 +228,8 @@ export async function POST(req: Request) {
       const dob = (c.dob || "").trim() || "01/01/2000";
       const gender = (c.gender || "M").trim().toUpperCase().startsWith("F") ? "F" : "M";
 
-      const candTeacher = toTitleCase((c.teacherName || "").trim() || (defaultTeacherName || "").trim() || cleanSubName);
-      const candSchool = toTitleCase((c.schoolName || "").trim() || (defaultSchoolName || "").trim() || "");
+      const candTeacher = toTitleCase((c.teacherName || "").trim() || effTeacher);
+      const candSchool = toTitleCase((c.schoolName || "").trim() || effSchool);
 
       const normGrade = normalizeGrade(c.grade || "Grade 1");
       const instrument = toTitleCase((c.instrument || "").trim() || "Electronic Keyboard");
@@ -325,7 +333,7 @@ export async function POST(req: Request) {
         highlightYellow: true,
         submitterName: cleanSubName,
         submitterEmail: cleanSubEmail,
-        schoolName: defaultSchoolName ? toTitleCase(defaultSchoolName) : ""
+        schoolName: effSchool ? toTitleCase(effSchool) : ""
       });
       if (res.success) musicAppended = res.rowsAppended;
     }
@@ -337,7 +345,7 @@ export async function POST(req: Request) {
         highlightYellow: true,
         submitterName: cleanSubName,
         submitterEmail: cleanSubEmail,
-        schoolName: defaultSchoolName ? toTitleCase(defaultSchoolName) : ""
+        schoolName: effSchool ? toTitleCase(effSchool) : ""
       });
       if (res.success) rpAppended = res.rowsAppended;
     }
@@ -348,6 +356,8 @@ export async function POST(req: Request) {
       .join("\n");
 
     const waMessage = `Hello, I have submitted the Trinity Exam Enrollment Form on the website.
+Teacher: ${toTitleCase(effTeacher)}
+School/Academy: ${effSchool ? toTitleCase(effSchool) : "Independent"}
 Submitter: ${cleanSubName}
 Mobile: ${cleanSubMobile}
 Total Candidates: ${processedCandidates.length}
