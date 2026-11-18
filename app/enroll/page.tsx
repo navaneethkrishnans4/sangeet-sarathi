@@ -294,15 +294,21 @@ export default function PublicEnrollPage() {
   const upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(upiPayLink)}`;
 
   // Pre-populated WhatsApp Send Link
+  // User format: "I have submitted form for (Candidates name) and (Grade) , total : (total fee)"
   const getWhatsAppLink = () => {
-    const candidateSummary = candidates.map((c, i) => {
-      const sch = c.hasNoSchool || !c.schoolName ? "Independent (No School)" : toSchoolTitleCase(c.schoolName);
-      const inst = c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum") ? "Drums" : c.instrument;
-      return `${i + 1}. ${toTitleCase(c.firstName)} ${toTitleCase(c.lastName)} - ${c.grade} ${inst} (${c.examSuite}) [School: ${sch}]`;
-    }).join("%0A");
+    let msg = "";
+    if (candidates.length === 1) {
+      const c = candidates[0];
+      const name = `${toTitleCase(c.firstName)} ${toTitleCase(c.lastName)}`.trim();
+      msg = `I have submitted form for ${name} and ${c.grade} , total : ₹${totalFee.toLocaleString("en-IN")}`;
+    } else {
+      const list = candidates
+        .map(c => `${toTitleCase(c.firstName)} ${toTitleCase(c.lastName)} and ${c.grade}`)
+        .join(", ");
+      msg = `I have submitted form for ${list} , total : ₹${totalFee.toLocaleString("en-IN")}`;
+    }
 
-    const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries and completed payment:%0A%0A*Submitter Email:* ${encodeURIComponent(submitterEmail)}%0A*Submitter:* ${encodeURIComponent(toTitleCase(submitterName))}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Teacher Name:* ${encodeURIComponent(toTitleCase(teacherName))}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI / Bank Transfer")}%0A%0A*Candidates Breakdown:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
-    return `https://wa.me/91${WHATSAPP_NUMBER}?text=${msg}`;
+    return `https://wa.me/91${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
   };
 
   // STEP 1: Triggered when user clicks "Review & Submit Entries"
