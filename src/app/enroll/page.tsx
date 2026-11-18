@@ -153,7 +153,7 @@ const GRADES_WITH_FEES = [
   { grade: "Grade 8", fee: 13500 },
 ];
 
-const DEFAULT_UPI_ID = "mssangeetsarath@eazypay@icici";
+const DEFAULT_UPI_ID = "mssangeetsarathi.eazypay@icici";
 const BANK_ACCOUNT_NUMBER = "026205005146";
 const BANK_IFSC_CODE = "ICIC0000262";
 const BANK_BENEFICIARY = "M/s Sangeet Sarathi";
@@ -289,9 +289,8 @@ export default function PublicEnrollPage() {
     setTimeout(() => setCopiedKey(null), 2500);
   };
 
-  // UPI deep link & QR Code
-  const upiPayLink = `upi://pay?pa=${DEFAULT_UPI_ID}&pn=Sangeet%20Sarathi&am=${totalFee}&cu=INR&tn=Trinity%20Exam%20Enrollment`;
-  const upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(upiPayLink)}`;
+  // UPI deep link & QR Code (direct to ICICI Merchant account)
+  const upiPayLink = `upi://pay?pa=mssangeetsarathi.eazypay@icici&pn=MSSANGEETSARATHI&tr=EZYS7736411230&mc=5971&cu=INR&am=${totalFee}&tn=Trinity%20Exam%20Fee`;
 
   // Pre-populated WhatsApp Send Link
   // User format: "I have submitted form for (Candidates name) and (Grade) , total : (total fee)"
@@ -736,20 +735,24 @@ export default function PublicEnrollPage() {
 
               {/* QR Code & Copyable Bank / UPI Details Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-center">
-                {/* QR Code */}
-                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col items-center text-center">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200">
+                {/* QR Code Card */}
+                <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 flex flex-col items-center text-center">
+                  <a
+                    href={upiPayLink}
+                    title="Click or Tap to Pay via UPI App"
+                    className="p-1.5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all block max-w-[240px] group cursor-pointer"
+                  >
                     <img
-                      src={upiQrUrl}
-                      alt="UPI QR Code"
-                      className="w-48 h-48 object-contain"
+                      src="/images/sangeet-sarathi-upi-qr-card.png"
+                      alt="ICICI Bank UPI QR Code - M/S Sangeet Sarathi"
+                      className="w-full h-auto object-contain rounded-xl group-hover:scale-[1.01] transition-transform"
                     />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 mt-3 flex items-center gap-1.5">
+                  </a>
+                  <span className="text-xs font-bold text-slate-800 mt-3 flex items-center gap-1.5">
                     <QrCode className="w-4 h-4 text-amber-600" />
-                    Scan with any UPI App to Pay
+                    Scan or Tap QR to Pay
                   </span>
-                  <span className="text-[11px] text-slate-500 mt-0.5">Google Pay • PhonePe • Paytm • BHIM • iMobile</span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">Google Pay • PhonePe • Paytm • BHIM • iMobile • CRED</span>
                 </div>
 
                 {/* All Copyable Payment Credentials */}
@@ -1371,6 +1374,17 @@ export default function PublicEnrollPage() {
                 </div>
               </div>
             </div>
+
+            {/* Error Message near Review Button */}
+            {errorMsg && (
+              <div className="p-4 bg-rose-50 border-2 border-rose-500 rounded-2xl flex items-start gap-3 shadow-md animate-in fade-in slide-in-from-bottom-2">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-rose-900">Please Check Your Entries</h4>
+                  <p className="text-xs text-rose-700 mt-1 font-semibold">{errorMsg}</p>
+                </div>
+              </div>
+            )}
 
             {/* Submit Button to Open Review Pop-up Modal */}
             <div className="pt-2">
