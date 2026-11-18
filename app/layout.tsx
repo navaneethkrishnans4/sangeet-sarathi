@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import "./globals.css";
 import { Outfit, Playfair_Display } from "next/font/google";
 
@@ -11,9 +12,15 @@ const playfair = Playfair_Display({
   variable: "--font-heading",
 });
 
-export const metadata = {
+export const metadata: Metadata = {
+  metadataBase: new URL("https://www.sangeetsarathi.com"),
   title: "Sangeet Sarathi | Premium Musical Instruments",
   description: "Discover the finest musical instruments at Sangeet Sarathi, Palakkad.",
+  openGraph: {
+    siteName: "Sangeet Sarathi",
+    locale: "en_IN",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
