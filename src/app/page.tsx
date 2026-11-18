@@ -23,38 +23,54 @@ export default function Home() {
         </p>
       </div>
 
-      {/* BIG TOP BUTTON: Trinity Exam Enrollment Portal */}
+      {/* BIG TOP SECTION: Trinity College London Digital Exam Enrollment Portal */}
       <div className="max-w-5xl w-full mb-10">
         <Link 
           href="/trinityexamenrollmentportal" 
           className="group block cursor-pointer"
         >
           <div className="p-[2px] rounded-3xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 shadow-2xl shadow-amber-500/20 hover:shadow-amber-500/40 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]">
-            <div className="bg-slate-950/95 hover:bg-slate-900/90 rounded-[22px] p-6 sm:p-7 flex flex-col sm:flex-row items-center justify-between gap-5 transition-colors">
-              <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black shrink-0 shadow-lg group-hover:rotate-6 transition-transform">
-                  <GraduationCap className="w-9 h-9" />
+            <div className="bg-slate-950/95 hover:bg-slate-900/90 rounded-[22px] p-6 sm:p-7 flex flex-col gap-6 transition-colors">
+              {/* Branding Logos Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="bg-white px-3.5 py-1.5 rounded-xl flex items-center shadow">
+                  <img
+                    src="/images/national-academy-of-music.png"
+                    alt="National Academy of Music"
+                    className="h-9 w-auto object-contain"
+                  />
                 </div>
-                <div>
-                  <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                    <span className="text-[11px] font-black uppercase tracking-widest text-amber-950 bg-amber-400 px-2.5 py-0.5 rounded-full font-mono">
-                      Official Portal
-                    </span>
-                    <span className="text-xs text-amber-200/80 font-semibold">
-                      Trinity College London • Centre Kochi (4048)
-                    </span>
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-black text-white group-hover:text-amber-300 transition-colors">
-                    Trinity Exam Enrollment Portal
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-300 mt-1">
-                    Candidate digital exam registration, instant fee calculation, and direct UPI payment gateway.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-amber-950 bg-amber-400 px-3 py-1 rounded-full font-mono">
+                    Official Exam Portal
+                  </span>
+                  <span className="text-xs text-amber-200/90 font-semibold bg-amber-950/60 px-3 py-1 rounded-full border border-amber-500/30">
+                    Exam Centre: Kochi (4048)
+                  </span>
+                </div>
+                <div className="bg-white px-3.5 py-1.5 rounded-xl flex items-center shadow">
+                  <img
+                    src="/images/trinity-college-london.png"
+                    alt="Trinity College London"
+                    className="h-8 w-auto object-contain"
+                  />
                 </div>
               </div>
-              <div className="flex items-center gap-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-4 rounded-xl text-base shrink-0 shadow-xl group-hover:translate-x-1 transition-all">
-                <span>Enter Enrollment Portal</span>
-                <ArrowRight className="w-5 h-5" />
+
+              {/* Title & Action */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-5">
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white group-hover:text-amber-300 transition-colors">
+                    Trinity College London Digital Exam Enrollment Portal
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-1.5">
+                    Official candidate digital exam registration, Technical & Repertoire pathway options, instant fee calculation, and direct UPI payment gateway.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-4 rounded-xl text-base shrink-0 shadow-xl group-hover:translate-x-1 transition-all">
+                  <span>Enter Enrollment Portal</span>
+                  <ArrowRight className="w-5 h-5" />
+                </div>
               </div>
             </div>
           </div>

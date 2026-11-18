@@ -272,6 +272,7 @@ export async function POST(req: Request) {
       }
 
       const examType = isRP ? "Rock & Pop" : "Classical & Jazz";
+      const candPathway = !isRP && c.pathway ? c.pathway : (!isRP ? "Technical Work Pathway" : undefined);
 
       const { teacherId } = await resolveTeacher(candTeacher, candSchool, cleanSubEmail);
 
@@ -330,6 +331,7 @@ export async function POST(req: Request) {
         grade: normGrade,
         instrument,
         examType,
+        pathway: candPathway,
         suite: examType,
         fee,
         email: cleanSubEmail,

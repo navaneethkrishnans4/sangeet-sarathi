@@ -204,6 +204,7 @@ export interface CandidateSheetRow {
   grade: string;
   instrument: string;
   examType: string;
+  pathway?: string;
   fee: number;
   email?: string | null;
   submitterName?: string | null;
@@ -295,9 +296,12 @@ export async function appendCandidatesToGoogleSheet(
       const row = new Array(38).fill("");
       const isRP = isRockAndPop;
       const suiteName = isRP ? "Rock and Pop (Digital)" : "Classical and Jazz (Digital)";
+      const isRepertoire = Boolean(c.pathway && c.pathway.toLowerCase().includes("repertoire"));
       const prodName = isRP 
         ? `Rock and Pop ${c.grade} (Digital)` 
-        : `Classical and Jazz Technical ${c.grade} (Digital)`;
+        : (isRepertoire
+            ? `Classical and Jazz Repertoire ${c.grade} (Digital)`
+            : `Classical and Jazz Technical ${c.grade} (Digital)`);
 
       const cSubName = toTitleCase(c.submitterName || submitterName || "Teacher");
       const cSubParts = cSubName.split(/\s+/);
