@@ -33,6 +33,8 @@ interface CandidateForm {
   examSuite: "Classical & Jazz" | "Rock & Pop";
   instrument: string;
   grade: string;
+  schoolName: string;
+  hasNoSchool: boolean;
 }
 
 const CLASSICAL_INSTRUMENTS = [
@@ -86,7 +88,9 @@ export default function PublicEnrollPage() {
       gender: "M",
       examSuite: "Classical & Jazz",
       instrument: "Electronic Keyboard",
-      grade: "Grade 1"
+      grade: "Grade 1",
+      schoolName: "",
+      hasNoSchool: false
     }
   ]);
 
@@ -116,6 +120,10 @@ export default function PublicEnrollPage() {
 
   // Add Candidate
   const handleAddCandidate = () => {
+    // Inherit the school name from the previous candidate if already entered
+    const lastCand = candidates[candidates.length - 1];
+    const prevSchool = lastCand && !lastCand.hasNoSchool ? lastCand.schoolName : "";
+
     setCandidates(prev => [
       ...prev,
       {
@@ -126,7 +134,9 @@ export default function PublicEnrollPage() {
         gender: "M",
         examSuite: "Classical & Jazz",
         instrument: "Electronic Keyboard",
-        grade: "Grade 1"
+        grade: "Grade 1",
+        schoolName: prevSchool,
+        hasNoSchool: false
       }
     ]);
   };
@@ -182,7 +192,11 @@ export default function PublicEnrollPage() {
 
   // WhatsApp Send Link
   const getWhatsAppLink = () => {
-    const candidateSummary = candidates.map((c, i) => `${i + 1}. ${c.firstName} ${c.lastName} (${c.grade} ${c.instrument} - ${c.examSuite})`).join("%0A");
+    const candidateSummary = candidates.map((c, i) => {
+      const sch = c.hasNoSchool || !c.schoolName ? "No School" : c.schoolName;
+      return `${i + 1}. ${c.firstName} ${c.lastName} (${c.grade} ${c.instrument} - ${c.examSuite}) [School: ${sch}]`;
+    }).join("%0A");
+
     const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries on the enrollment portal:%0A%0A*Teacher Name:* ${encodeURIComponent(teacherName)}%0A*School/Academy:* ${encodeURIComponent(schoolName || "Independent")}%0A*Submitter:* ${encodeURIComponent(submitterName)}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI Payment")}%0A%0A*Candidates:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
     return `https://wa.me/91${WHATSAPP_NUMBER}?text=${msg}`;
   };
@@ -194,16 +208,22 @@ export default function PublicEnrollPage() {
 
     // Validation: Section 1 Candidates
     for (let i = 0; i < candidates.length; i++) {
-      if (!candidates[i].firstName.trim()) {
+      const c = candidates[i];
+      if (!c.firstName.trim()) {
         setErrorMsg(`Please enter First Name for Candidate #${i + 1}.`);
         return;
       }
-      if (!candidates[i].lastName.trim()) {
+      if (!c.lastName.trim()) {
         setErrorMsg(`Please enter Last Name for Candidate #${i + 1}.`);
         return;
       }
-      if (!candidates[i].dob.trim()) {
+      if (!c.dob.trim()) {
         setErrorMsg(`Please enter Date of Birth (DD/MM/YYYY) for Candidate #${i + 1}.`);
+        return;
+      }
+      // Mandatory School Name unless "No Music School" is selected
+      if (!c.hasNoSchool && !c.schoolName.trim()) {
+        setErrorMsg(`Please enter Music School Name for Candidate #${i + 1} (e.g. National) or click "No Music School".`);
         return;
       }
     }
@@ -234,7 +254,16 @@ export default function PublicEnrollPage() {
           submitterName,
           submitterMobile,
           submitterEmail,
-          candidates,
+          candidates: candidates.map(c => ({
+            firstName: c.firstName,
+            lastName: c.lastName,
+            dob: c.dob,
+            gender: c.gender,
+            examSuite: c.examSuite,
+            instrument: c.instrument,
+            grade: c.grade,
+            schoolName: c.hasNoSchool ? "" : c.schoolName.trim()
+          })),
           paymentScreenshotBase64: paymentScreenshot,
           paymentScreenshotFileName: screenshotName,
           paymentRefNote: paymentRef
@@ -347,7 +376,7 @@ export default function PublicEnrollPage() {
                 href={submitSuccess.summary?.whatsappUrl || getWhatsAppLink()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-emerald-600/20 transition-all text-sm sm:text-base"
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-emerald-600/20 transition-all text-sm sm:text-base cursor-pointer"
               >
                 <Phone className="w-5 h-5" />
                 Open WhatsApp (+91 6282920294)
@@ -366,13 +395,15 @@ export default function PublicEnrollPage() {
                     gender: "M",
                     examSuite: "Classical & Jazz",
                     instrument: "Electronic Keyboard",
-                    grade: "Grade 1"
+                    grade: "Grade 1",
+                    schoolName: "",
+                    hasNoSchool: false
                   }
                 ]);
                 setPaymentScreenshot(null);
                 setScreenshotName(null);
               }}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 underline underline-offset-4 transition-colors"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 underline underline-offset-4 transition-colors cursor-pointer"
             >
               Fill another entry form
             </button>
@@ -402,7 +433,7 @@ export default function PublicEnrollPage() {
                       Candidate Details ({candidates.length})
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Add 1 or more candidates. Choose Classical & Jazz or Rock & Pop for each.
+                      Add candidate(s). Music school name for certificate is required per student (or select No Music School).
                     </p>
                   </div>
                 </div>
@@ -617,6 +648,71 @@ export default function PublicEnrollPage() {
                           ))}
                         </select>
                       </div>
+
+                      {/* Music School Name for Certificate (Mandatory unless "No Music School" is clicked) */}
+                      <div className="sm:col-span-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                            Music School Name for Certificate <span className="text-rose-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = !cand.hasNoSchool;
+                              updateCandidate(index, "hasNoSchool", next);
+                              if (next) {
+                                updateCandidate(index, "schoolName", "");
+                              }
+                            }}
+                            className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto ${
+                              cand.hasNoSchool
+                                ? "bg-slate-900 text-amber-400 border-slate-800 shadow-sm"
+                                : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                            }`}
+                          >
+                            {cand.hasNoSchool ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-amber-400" />
+                                <span>No Music School Selected</span>
+                              </>
+                            ) : (
+                              <span>No Music School</span>
+                            )}
+                          </button>
+                        </div>
+
+                        {cand.hasNoSchool ? (
+                          <div className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-600 text-xs sm:text-sm flex items-center justify-between">
+                            <span className="italic">
+                              No music school will appear on the certificate (Independent candidate)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateCandidate(index, "hasNoSchool", false)}
+                              className="text-xs text-amber-600 font-bold hover:underline cursor-pointer ml-2 shrink-0"
+                            >
+                              Enter School Name
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                            <input
+                              type="text"
+                              required={!cand.hasNoSchool}
+                              value={cand.schoolName}
+                              onChange={e => updateCandidate(index, "schoolName", e.target.value)}
+                              placeholder="e.g. National"
+                              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
+                            />
+                          </div>
+                        )}
+                        <span className="text-[11px] text-slate-500 mt-1 block">
+                          {cand.hasNoSchool
+                            ? "Certificate will display student name only without any school or academy."
+                            : 'Exact music school name to be printed on certificate (e.g. "National"). Click "No Music School" if not applicable.'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -663,7 +759,7 @@ export default function PublicEnrollPage() {
                     />
                   </div>
                   <span className="text-[11px] text-slate-500 mt-1 block">
-                    Required for official Trinity College London certificate records
+                    Required for official Trinity College London records
                   </span>
                 </div>
 
@@ -726,7 +822,7 @@ export default function PublicEnrollPage() {
                 {/* Music School / Academy */}
                 <div>
                   <label htmlFor={`${formId}-school`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    Music School / Academy <span className="text-slate-400 font-normal">(Optional)</span>
+                    General Music School / Academy <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <div className="relative">
                     <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
@@ -735,7 +831,7 @@ export default function PublicEnrollPage() {
                       type="text"
                       value={schoolName}
                       onChange={e => setSchoolName(e.target.value)}
-                      placeholder="e.g. Zimbels School of Music"
+                      placeholder="e.g. National"
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
                     />
                   </div>
@@ -773,7 +869,7 @@ export default function PublicEnrollPage() {
                   {/* Mobile Direct Pay Button */}
                   <a
                     href={upiPayLink}
-                    className="inline-flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 active:scale-95 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-all text-sm shrink-0"
+                    className="inline-flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 active:scale-95 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-all text-sm shrink-0 cursor-pointer"
                   >
                     <CreditCard className="w-4 h-4 text-amber-400" />
                     Pay ₹{totalFee.toLocaleString("en-IN")} via UPI App
@@ -898,7 +994,7 @@ export default function PublicEnrollPage() {
                   href={getWhatsAppLink()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-all shadow-sm shrink-0"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-all shadow-sm shrink-0 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   WhatsApp 6282920294

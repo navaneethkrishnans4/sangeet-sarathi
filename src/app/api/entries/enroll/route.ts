@@ -229,7 +229,9 @@ export async function POST(req: Request) {
       const gender = (c.gender || "M").trim().toUpperCase().startsWith("F") ? "F" : "M";
 
       const candTeacher = toTitleCase((c.teacherName || "").trim() || effTeacher);
-      const candSchool = toTitleCase((c.schoolName || "").trim() || effSchool);
+      const candSchool = c.schoolName !== undefined
+        ? ((c.schoolName || "").trim() ? toTitleCase(c.schoolName.trim()) : "")
+        : toTitleCase(effSchool);
 
       const normGrade = normalizeGrade(c.grade || "Grade 1");
       const instrument = toTitleCase((c.instrument || "").trim() || "Electronic Keyboard");
@@ -333,7 +335,7 @@ export async function POST(req: Request) {
         highlightYellow: true,
         submitterName: cleanSubName,
         submitterEmail: cleanSubEmail,
-        schoolName: effSchool ? toTitleCase(effSchool) : ""
+        schoolName: ""
       });
       if (res.success) musicAppended = res.rowsAppended;
     }
@@ -345,14 +347,14 @@ export async function POST(req: Request) {
         highlightYellow: true,
         submitterName: cleanSubName,
         submitterEmail: cleanSubEmail,
-        schoolName: effSchool ? toTitleCase(effSchool) : ""
+        schoolName: ""
       });
       if (res.success) rpAppended = res.rowsAppended;
     }
 
     // 4. Construct WhatsApp Message URL for 6282920294
     const candListText = processedCandidates
-      .map((c, i) => `${i + 1}. ${c.firstName} ${c.lastName} - ${c.grade} ${c.instrument} (${c.examType}) : ₹${c.fee}`)
+      .map((c, i) => `${i + 1}. ${c.firstName} ${c.lastName} - ${c.grade} ${c.instrument} (${c.examType})${c.schoolName ? ` [School: ${c.schoolName}]` : " [No School]"}`)
       .join("\n");
 
     const waMessage = `Hello, I have submitted the Trinity Exam Enrollment Form on the website.
