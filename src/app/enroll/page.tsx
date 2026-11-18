@@ -431,32 +431,43 @@ export default function PublicEnrollPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 antialiased selection:bg-amber-100 selection:text-amber-900 pb-20">
       {/* Top Header / Branding Banner */}
-      <header className="bg-slate-900 text-white border-b border-slate-800 shadow-lg">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-7 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-            <div className="bg-white p-2 sm:p-2.5 rounded-2xl shadow-md border border-slate-700/60 flex items-center justify-center shrink-0">
+      <header className="bg-white text-slate-900 border-b border-slate-200/90 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-5 sm:gap-6">
+            {/* Left Section: National Academy of Music Branding */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
               <img
                 src="/images/national-academy-of-music.png"
                 alt="National Academy of Music"
-                className="h-10 sm:h-12 w-auto object-contain"
+                className="h-12 sm:h-14 w-auto object-contain shrink-0"
               />
-            </div>
-            <div>
-              <div className="flex items-center justify-center sm:justify-start gap-2">
-                <span className="text-xs font-semibold uppercase tracking-widest text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-500/30">
-                  Official Portal
-                </span>
-                <span className="text-xs text-slate-400">Trinity College London (Centre 4048)</span>
+              <div className="h-10 w-px bg-slate-200 hidden sm:block" />
+              <div>
+                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Official Portal
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Exam Centre 63868</span>
+                </div>
+                <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 mt-0.5">
+                  National Academy of Music
+                </h1>
+                <p className="text-xs sm:text-sm font-bold text-amber-700">
+                  Trinity College of London Digital Exam Enrollment Form
+                </p>
+                <p className="text-xs text-slate-500 font-medium">
+                  Digital Examination Entries
+                </p>
               </div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-1">
-                National Academy of Music
-              </h1>
-              <p className="text-sm sm:text-base font-bold text-amber-400 mt-0.5">
-                Trinity College of London Digital Exam Enrollment Form
-              </p>
-              <p className="text-xs sm:text-sm text-slate-300">
-                Digital Examination Entries
-              </p>
+            </div>
+
+            {/* Right Section: Trinity College London Official Centre Logo */}
+            <div className="flex items-center justify-center shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-6">
+              <img
+                src="/images/trinity-college-london.png"
+                alt="Trinity College London Registered Exam Centre 63868"
+                className="h-14 sm:h-16 w-auto object-contain"
+              />
             </div>
           </div>
         </div>
