@@ -37,6 +37,7 @@ export default function Navbar() {
                 <div className={`${styles.menu} ${isOpen ? styles.menuOpen : ''}`}>
                     <ul className={styles.links}>
                         <li><Link href="/" className={styles.link} onClick={closeMenu}>Home</Link></li>
+                        <li><Link href="/trinityexamenrollmentportal" className={styles.link} onClick={closeMenu} style={{ color: '#d4af37', fontWeight: 'bold' }}>🎓 Exam Portal</Link></li>
                         <li><Link href="/shop" className={styles.link} onClick={closeMenu}>Collection</Link></li>
                         <li><Link href="/about" className={styles.link} onClick={closeMenu}>Our Story</Link></li>
                         <li><Link href="/contact" className={styles.link} onClick={closeMenu}>Contact</Link></li>
