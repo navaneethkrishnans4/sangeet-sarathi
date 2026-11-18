@@ -447,7 +447,7 @@ export default function PublicEnrollPage() {
                   <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                     Official Portal
                   </span>
-                  <span className="text-xs font-semibold text-slate-500">Exam Centre 63868</span>
+                  <span className="text-xs font-semibold text-slate-500">Exam Centre: Kochi (4048)</span>
                 </div>
                 <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 mt-0.5">
                   National Academy of Music
