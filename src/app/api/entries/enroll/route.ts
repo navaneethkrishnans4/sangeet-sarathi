@@ -162,9 +162,8 @@ export async function POST(req: Request) {
       sessionMonth
     } = body;
 
-    const effTeacher = (teacherName || defaultTeacherName || "").trim();
-    if (!effTeacher) {
-      return NextResponse.json({ success: false, error: "Teacher Name is required in contact details." }, { status: 400 });
+    if (!submitterEmail || !submitterEmail.trim() || !submitterEmail.includes("@")) {
+      return NextResponse.json({ success: false, error: "Valid Submitter Email Address is required." }, { status: 400 });
     }
 
     if (!submitterName || !submitterName.trim()) {
@@ -175,6 +174,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Submitter mobile number is required." }, { status: 400 });
     }
 
+    const effTeacher = (teacherName || defaultTeacherName || "").trim();
+    if (!effTeacher) {
+      return NextResponse.json({ success: false, error: "Teacher Name is required in contact details." }, { status: 400 });
+    }
+
     if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
       return NextResponse.json({ success: false, error: "Please add at least one candidate." }, { status: 400 });
     }
@@ -182,7 +186,7 @@ export async function POST(req: Request) {
     const effSchool = (schoolName || defaultSchoolName || "").trim();
     const targetMonth = sessionMonth || "December";
     const cleanSubName = toTitleCase(submitterName.trim());
-    const cleanSubEmail = (submitterEmail || "").trim() || "trinitykochi.ops.office@gmail.com";
+    const cleanSubEmail = submitterEmail.trim();
     const cleanSubMobile = (submitterMobile || "").trim();
 
     // 1. Process payment screenshot if provided
@@ -357,19 +361,22 @@ export async function POST(req: Request) {
       .map((c, i) => `${i + 1}. ${c.firstName} ${c.lastName} - ${c.grade} ${c.instrument} (${c.examType})${c.schoolName ? ` [School: ${c.schoolName}]` : " [No School]"}`)
       .join("\n");
 
-    const waMessage = `Hello, I have submitted the Trinity Exam Enrollment Form on the website.
-Teacher: ${toTitleCase(effTeacher)}
-School/Academy: ${effSchool ? toTitleCase(effSchool) : "Independent"}
+    const waMessage = `Hello Trinity Exam Centre,
+
+I have submitted exam entries on the enrollment portal:
+
+Submitter Email: ${cleanSubEmail}
 Submitter: ${cleanSubName}
 Mobile: ${cleanSubMobile}
+Teacher: ${toTitleCase(effTeacher)}
 Total Candidates: ${processedCandidates.length}
 Total Fee: ₹${totalFee.toLocaleString("en-IN")}
 Payment Ref: ${paymentRefNote || "UPI Payment"}
 
-Candidates:
+Candidates Breakdown:
 ${candListText}
 
-I am attaching my payment screenshot below for verification.`;
+Attaching payment screenshot below for verification.`;
 
     const whatsappUrl = `https://wa.me/916282920294?text=${encodeURIComponent(waMessage)}`;
 
