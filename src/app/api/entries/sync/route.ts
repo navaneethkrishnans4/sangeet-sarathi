@@ -64,7 +64,8 @@ function parseProduct(productStr: string): { grade: string; instrument: string }
   else if (lower.includes("violin")) instrument = "Violin";
   else if (lower.includes("guitar")) instrument = lower.includes("classical") ? "Classical Guitar" : "Acoustic Guitar";
   else if (lower.includes("keyboard") || lower.includes("ekb")) instrument = "Electronic Keyboard";
-  else if (lower.includes("drum")) instrument = "Drum Kit";
+  else if (lower.includes("drum kit") || lower.includes("drumkit")) instrument = "Drum Kit";
+  else if (lower.includes("drum")) instrument = "Drums";
   else if (lower.includes("vocal") || lower.includes("singing")) instrument = "Vocals";
   else if (lower.includes("sax")) instrument = "Saxophone";
   else if (cleanInst) instrument = toTitleCase(cleanInst);
@@ -244,10 +245,11 @@ export async function POST(req: Request) {
       const subjRaw = (r[8] || "");
       const { grade, instrument } = parseProduct(subjRaw);
 
-      const isRP = (suiteRaw.includes("rock") || suiteRaw.includes("pop") || subjRaw.toLowerCase().includes("rock") || instrument === "Drum Kit" || instrument === "Vocals") &&
+      const isRP = (suiteRaw.includes("rock") || suiteRaw.includes("pop") || subjRaw.toLowerCase().includes("rock") || instrument === "Drums") &&
         instrument !== "Electronic Keyboard" &&
         instrument !== "Piano" &&
-        instrument !== "Violin";
+        instrument !== "Violin" &&
+        instrument !== "Drum Kit";
       const examType = isRP ? "Rock & Pop" : "Classical & Jazz";
       const fee = parseFee(r[12], grade);
 

@@ -93,8 +93,11 @@ function normalizeInstrument(inst: string, fullContext?: string): { instrument: 
   if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
     return { instrument: "Acoustic Guitar", examType: isExplicitRP ? "Rock & Pop" : "Classical & Jazz" };
   }
+  if (clean.includes("drum kit") || clean.includes("drumkit")) {
+    return { instrument: "Drum Kit", examType: "Classical & Jazz" };
+  }
   if (clean.includes("drum")) {
-    return { instrument: "Drum Kit", examType: "Rock & Pop" };
+    return { instrument: isExplicitRP ? "Drums" : "Drums", examType: "Rock & Pop" };
   }
   if (clean.includes("vocal") || clean.includes("sing")) {
     return { instrument: "Vocals", examType: "Rock & Pop" };

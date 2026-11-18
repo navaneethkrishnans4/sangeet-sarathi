@@ -101,8 +101,12 @@ function normalizeInstrument(inst: string, explicitSuite?: string): { instrument
     instrument = "Classical Guitar";
   } else if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
     instrument = "Acoustic Guitar";
-  } else if (clean.includes("drum")) {
+  } else if (clean.includes("drum kit") || clean.includes("drumkit")) {
     instrument = "Drum Kit";
+    examType = "Classical & Jazz";
+  } else if (clean.includes("drum")) {
+    instrument = "Drums";
+    examType = "Rock & Pop";
   } else if (clean.includes("vocal") || clean.includes("sing")) {
     instrument = "Vocals";
   } else if (clean.includes("violin")) {
@@ -113,8 +117,8 @@ function normalizeInstrument(inst: string, explicitSuite?: string): { instrument
     instrument = toTitleCase(inst.trim());
   }
 
-  // Piano, Keyboard, Violin, Classical Guitar are strictly Classical & Jazz
-  if (instrument === "Electronic Keyboard" || instrument === "Piano" || instrument === "Violin" || instrument === "Classical Guitar") {
+  // Piano, Keyboard, Violin, Classical Guitar, Drum Kit are strictly Classical & Jazz
+  if (instrument === "Electronic Keyboard" || instrument === "Piano" || instrument === "Violin" || instrument === "Classical Guitar" || instrument === "Drum Kit") {
     examType = "Classical & Jazz";
   }
 

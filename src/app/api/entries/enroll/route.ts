@@ -8,6 +8,8 @@ import { PrismaClient } from "@prisma/client";
 import {
   appendCandidatesToGoogleSheet,
   toTitleCase,
+  toSchoolTitleCase,
+  validateDob,
   MUSIC_MASTER_SHEET_ID,
   ROCK_POP_MASTER_SHEET_ID,
   CandidateSheetRow
@@ -229,31 +231,44 @@ export async function POST(req: Request) {
 
       const firstName = toTitleCase(rawFirst);
       const lastName = toTitleCase(rawLast);
-      const dob = (c.dob || "").trim() || "01/01/2000";
+      
+      const dobValidation = validateDob(c.dob);
+      if (!dobValidation.valid) {
+        return NextResponse.json({ success: false, error: `Candidate #${i + 1} (${firstName} ${lastName}): ${dobValidation.error}` }, { status: 400 });
+      }
+      const dob = dobValidation.formatted!;
       const gender = (c.gender || "M").trim().toUpperCase().startsWith("F") ? "F" : "M";
 
       const candTeacher = toTitleCase((c.teacherName || "").trim() || effTeacher);
       const candSchool = c.schoolName !== undefined
-        ? ((c.schoolName || "").trim() ? toTitleCase(c.schoolName.trim()) : "")
-        : toTitleCase(effSchool);
+        ? ((c.schoolName || "").trim() ? toSchoolTitleCase(c.schoolName.trim()) : "")
+        : toSchoolTitleCase(effSchool);
 
       const normGrade = normalizeGrade(c.grade || "Grade 1");
-      const instrument = toTitleCase((c.instrument || "").trim() || "Electronic Keyboard");
       const fee = getFeeForGrade(normGrade);
       totalFee += fee;
 
-      // Determine Exam Suite
+      // Determine Exam Suite and Instrument:
+      // Classical & Jazz uses "Drum Kit"
+      // Rock & Pop uses "Drums"
       const requestedSuite = (c.examSuite || "").trim().toLowerCase();
-      const instLower = instrument.toLowerCase();
+      const rawInst = (c.instrument || "").trim();
+      const instLower = rawInst.toLowerCase();
 
-      let isRP = (requestedSuite.includes("rock") || requestedSuite.includes("pop") || requestedSuite.includes("r&p")) &&
-        !instLower.includes("keyboard") &&
-        !instLower.includes("ekb") &&
-        !instLower.includes("piano") &&
-        !instLower.includes("violin");
+      let isRP = false;
+      let instrument = toTitleCase(rawInst || "Electronic Keyboard");
 
-      if (instLower.includes("drum") || instLower.includes("electric guitar") || instLower.includes("bass")) {
+      if (requestedSuite.includes("rock") || requestedSuite.includes("pop") || requestedSuite.includes("r&p")) {
         isRP = true;
+        if (instLower.includes("drum")) {
+          instrument = "Drums";
+        }
+      } else {
+        // Classical & Jazz
+        isRP = false;
+        if (instLower.includes("drum")) {
+          instrument = "Drum Kit";
+        }
       }
 
       const examType = isRP ? "Rock & Pop" : "Classical & Jazz";
