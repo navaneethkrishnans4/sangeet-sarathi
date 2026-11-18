@@ -21,7 +21,10 @@ import {
   Calendar,
   Sparkles,
   QrCode,
-  ChevronRight
+  ChevronRight,
+  ArrowRight,
+  Printer,
+  Table as TableIcon
 } from "lucide-react";
 
 interface CandidateForm {
@@ -78,7 +81,10 @@ const WHATSAPP_NUMBER = "6282920294";
 export default function PublicEnrollPage() {
   const formId = useId();
 
-  // Section 1: Candidates list (First)
+  // Page Step: 1 = Form Entry, 2 = Payment Portal & Summary
+  const [currentStep, setCurrentStep] = useState<"form" | "payment">("form");
+
+  // Candidates list (Section 1)
   const [candidates, setCandidates] = useState<CandidateForm[]>([
     {
       id: "c-1",
@@ -94,18 +100,20 @@ export default function PublicEnrollPage() {
     }
   ]);
 
-  // Section 2: Contact & Teacher details (Second - Teacher Name is Mandatory)
+  // Contact & Teacher details (Section 2 - Teacher Name is Mandatory)
   const [teacherName, setTeacherName] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [submitterName, setSubmitterName] = useState("");
   const [submitterMobile, setSubmitterMobile] = useState("");
   const [submitterEmail, setSubmitterEmail] = useState("");
 
-  // Section 3: Payment states
+  // Payment states (Payment Portal)
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
   const [screenshotName, setScreenshotName] = useState<string | null>(null);
   const [paymentRef, setPaymentRef] = useState("");
   const [copiedUpi, setCopiedUpi] = useState(false);
+  const [savingProof, setSavingProof] = useState(false);
+  const [proofSaved, setProofSaved] = useState(false);
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -118,11 +126,22 @@ export default function PublicEnrollPage() {
     return sum + (item ? item.fee : 6050);
   }, 0);
 
-  // Add Candidate
+  // Add Candidate - Auto-populates school from previous candidates
   const handleAddCandidate = () => {
-    // Inherit the school name from the previous candidate if already entered
-    const lastCand = candidates[candidates.length - 1];
-    const prevSchool = lastCand && !lastCand.hasNoSchool ? lastCand.schoolName : "";
+    // Find the latest non-empty school name from existing candidates
+    let latestSchool = "";
+    let latestNoSchool = false;
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      if (candidates[i].hasNoSchool) {
+        latestNoSchool = true;
+        latestSchool = "";
+        break;
+      }
+      if (candidates[i].schoolName && candidates[i].schoolName.trim()) {
+        latestSchool = candidates[i].schoolName.trim();
+        break;
+      }
+    }
 
     setCandidates(prev => [
       ...prev,
@@ -135,8 +154,8 @@ export default function PublicEnrollPage() {
         examSuite: "Classical & Jazz",
         instrument: "Electronic Keyboard",
         grade: "Grade 1",
-        schoolName: prevSchool,
-        hasNoSchool: false
+        schoolName: latestSchool,
+        hasNoSchool: latestNoSchool
       }
     ]);
   };
@@ -166,15 +185,46 @@ export default function PublicEnrollPage() {
     });
   };
 
-  // Handle Screenshot Upload
+  // Helper to copy a typed school name to all candidate cards
+  const applySchoolToAll = (schoolToApply: string) => {
+    setCandidates(prev => prev.map(c => ({
+      ...c,
+      schoolName: schoolToApply,
+      hasNoSchool: false
+    })));
+  };
+
+  // Handle Screenshot Upload in Payment Portal
   const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setScreenshotName(file.name);
     const reader = new FileReader();
-    reader.onload = () => {
-      setPaymentScreenshot(reader.result as string);
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      setPaymentScreenshot(base64);
+
+      // Auto-save proof to server
+      try {
+        setSavingProof(true);
+        await fetch("/api/entries/enroll/proof", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            submitterName,
+            submitterMobile,
+            paymentRefNote: paymentRef,
+            paymentScreenshotBase64: base64,
+            paymentScreenshotFileName: file.name
+          })
+        });
+        setProofSaved(true);
+      } catch (err) {
+        console.warn("Screenshot upload warning:", err);
+      } finally {
+        setSavingProof(false);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -197,11 +247,11 @@ export default function PublicEnrollPage() {
       return `${i + 1}. ${c.firstName} ${c.lastName} (${c.grade} ${c.instrument} - ${c.examSuite}) [School: ${sch}]`;
     }).join("%0A");
 
-    const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries on the enrollment portal:%0A%0A*Teacher Name:* ${encodeURIComponent(teacherName)}%0A*School/Academy:* ${encodeURIComponent(schoolName || "Independent")}%0A*Submitter:* ${encodeURIComponent(submitterName)}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI Payment")}%0A%0A*Candidates:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
+    const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries on the enrollment portal:%0A%0A*Teacher Name:* ${encodeURIComponent(teacherName)}%0A*School/Academy:* ${encodeURIComponent(schoolName || "Independent")}%0A*Submitter:* ${encodeURIComponent(submitterName)}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI Payment")}%0A%0A*Candidates Breakdown:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
     return `https://wa.me/91${WHATSAPP_NUMBER}?text=${msg}`;
   };
 
-  // Submit Form
+  // Submit Form - Validates and transitions to Payment Portal
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -221,7 +271,7 @@ export default function PublicEnrollPage() {
         setErrorMsg(`Please enter Date of Birth (DD/MM/YYYY) for Candidate #${i + 1}.`);
         return;
       }
-      // Mandatory School Name unless "No Music School" is selected
+      // Mandatory School Name unless "No Music School" is clicked
       if (!c.hasNoSchool && !c.schoolName.trim()) {
         setErrorMsg(`Please enter Music School Name for Candidate #${i + 1} (e.g. National) or click "No Music School".`);
         return;
@@ -264,8 +314,6 @@ export default function PublicEnrollPage() {
             grade: c.grade,
             schoolName: c.hasNoSchool ? "" : c.schoolName.trim()
           })),
-          paymentScreenshotBase64: paymentScreenshot,
-          paymentScreenshotFileName: screenshotName,
           paymentRefNote: paymentRef
         })
       });
@@ -276,6 +324,7 @@ export default function PublicEnrollPage() {
       }
 
       setSubmitSuccess(data);
+      setCurrentStep("payment");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: any) {
       console.error(err);
@@ -305,7 +354,7 @@ export default function PublicEnrollPage() {
                 Trinity College London Exam Enrollment
               </h1>
               <p className="text-xs sm:text-sm text-slate-300">
-                Digital Examination Entries & Direct UPI Verification
+                Digital Examination Entries & Direct UPI Payment Verification
               </p>
             </div>
           </div>
@@ -319,96 +368,415 @@ export default function PublicEnrollPage() {
 
       {/* Main Container */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 mt-8">
-        {/* Success Screen */}
-        {submitSuccess ? (
-          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/80 p-6 sm:p-10 text-center animate-in fade-in zoom-in-95 duration-300">
-            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 ring-8 ring-emerald-50">
-              <CheckCircle2 className="w-12 h-12" />
-            </div>
-
-            <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider rounded-full border border-emerald-200 mb-2">
-              Enrollment Successful
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Exam Entries Recorded!
-            </h2>
-            <p className="text-slate-600 max-w-lg mx-auto mt-2 text-sm sm:text-base">
-              Thank you, <strong className="text-slate-800">{submitterName}</strong>. Candidate details under Teacher <strong className="text-slate-800">{teacherName}</strong> have been successfully written to the Trinity Master Google Sheet and database.
-            </p>
-
-            {/* Quick Summary Card */}
-            <div className="my-8 bg-slate-50 border border-slate-200 rounded-2xl p-5 text-left max-w-lg mx-auto">
-              <div className="flex justify-between items-center pb-3 border-b border-slate-200">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Teacher</span>
-                <span className="text-sm font-bold text-slate-900">{teacherName}</span>
-              </div>
-              {schoolName && (
-                <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">School / Academy</span>
-                  <span className="text-sm font-semibold text-slate-800">{schoolName}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Candidates</span>
-                <span className="text-base font-bold text-slate-900">{submitSuccess.summary?.totalCandidates || candidates.length} Student(s)</span>
-              </div>
-              <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Fees</span>
-                <span className="text-lg font-black text-amber-600">₹{submitSuccess.summary?.totalFee?.toLocaleString("en-IN") || totalFee.toLocaleString("en-IN")}</span>
-              </div>
-              <div className="pt-3 text-xs text-slate-500 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>Entries are highlighted in <strong>Yellow</strong> on the Master Sheet for verification.</span>
-              </div>
-            </div>
-
-            {/* WhatsApp Action Card */}
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300/80 rounded-2xl p-6 max-w-lg mx-auto mb-8 shadow-sm">
-              <h3 className="text-base font-bold text-emerald-950 flex items-center justify-center gap-2">
-                <Send className="w-5 h-5 text-emerald-600" />
-                Step 2: Send Payment Screenshot on WhatsApp
-              </h3>
-              <p className="text-xs text-emerald-800 mt-1.5 leading-relaxed">
-                Click the button below to send your payment screenshot directly to our verification team at <strong>+91 6282920294</strong>.
-              </p>
-
-              <a
-                href={submitSuccess.summary?.whatsappUrl || getWhatsAppLink()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-emerald-600/20 transition-all text-sm sm:text-base cursor-pointer"
-              >
-                <Phone className="w-5 h-5" />
-                Open WhatsApp (+91 6282920294)
-              </a>
-            </div>
-
+        {/* Step Indicator Tabs */}
+        <div className="flex items-center justify-center mb-8">
+          <div className="flex items-center gap-2 sm:gap-4 bg-white border border-slate-200/90 p-1.5 rounded-2xl shadow-sm text-xs font-bold">
             <button
+              type="button"
               onClick={() => {
-                setSubmitSuccess(null);
-                setCandidates([
-                  {
-                    id: "c-1",
-                    firstName: "",
-                    lastName: "",
-                    dob: "",
-                    gender: "M",
-                    examSuite: "Classical & Jazz",
-                    instrument: "Electronic Keyboard",
-                    grade: "Grade 1",
-                    schoolName: "",
-                    hasNoSchool: false
-                  }
-                ]);
-                setPaymentScreenshot(null);
-                setScreenshotName(null);
+                if (currentStep === "payment") setCurrentStep("form");
               }}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 underline underline-offset-4 transition-colors cursor-pointer"
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                currentStep === "form"
+                  ? "bg-slate-900 text-white shadow"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
             >
-              Fill another entry form
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                currentStep === "form" ? "bg-amber-400 text-slate-950" : "bg-slate-200 text-slate-700"
+              }`}>
+                1
+              </span>
+              <span>Candidate & Contact Details</span>
             </button>
+
+            <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
+
+            <div
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl transition-all ${
+                currentStep === "payment"
+                  ? "bg-amber-500 text-slate-950 shadow font-extrabold"
+                  : "text-slate-400"
+              }`}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                currentStep === "payment" ? "bg-slate-950 text-white" : "bg-slate-200 text-slate-500"
+              }`}>
+                2
+              </span>
+              <span>Payment Portal & Summary</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* STEP 2: PAYMENT PORTAL (AFTER SUBMITTING)                     */}
+        {/* ------------------------------------------------------------- */}
+        {currentStep === "payment" ? (
+          <div className="space-y-8 animate-in fade-in zoom-in-95 duration-300">
+            {/* Top Confirmation Banner */}
+            <div className="bg-white rounded-3xl shadow-sm border border-emerald-200 p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4 text-center sm:text-left">
+                <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ring-4 ring-emerald-50">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold uppercase tracking-wider mb-1">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    Entries Recorded Successfully
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                    Welcome to the Exam Payment Portal
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+                    Your candidates under Teacher <strong className="text-slate-900">{teacherName}</strong> are saved to the Trinity Master Google Sheet (highlighted in yellow).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex sm:flex-col gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2.5 rounded-xl border border-slate-300 transition-all cursor-pointer shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print Summary
+                </button>
+              </div>
+            </div>
+
+            {/* Excel-Style Candidate Summary Table */}
+            <div className="bg-white rounded-3xl shadow-md border border-slate-300 overflow-hidden">
+              <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <TableIcon className="w-5 h-5 text-amber-400" />
+                  <h3 className="font-bold text-sm sm:text-base text-white tracking-wide">
+                    Enrollment Summary Table ({candidates.length} Candidate{candidates.length > 1 ? "s" : ""})
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                    Session: December
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-400/20 text-amber-300 border border-amber-400/30 font-semibold">
+                    Excel Format
+                  </span>
+                </div>
+              </div>
+
+              {/* Table Container */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300 uppercase tracking-wider text-[11px]">
+                      <th className="py-3 px-3 text-center border-r border-slate-200 w-12">#</th>
+                      <th className="py-3 px-4 border-r border-slate-200">Candidate Name</th>
+                      <th className="py-3 px-3 border-r border-slate-200">DOB</th>
+                      <th className="py-3 px-3 text-center border-r border-slate-200">Gender</th>
+                      <th className="py-3 px-4 border-r border-slate-200">Exam Suite</th>
+                      <th className="py-3 px-4 border-r border-slate-200">Subject / Instrument</th>
+                      <th className="py-3 px-3 border-r border-slate-200">Grade</th>
+                      <th className="py-3 px-4 border-r border-slate-200">School on Certificate</th>
+                      <th className="py-3 px-4 text-right">Fee (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {candidates.map((c, idx) => {
+                      const currentFeeItem = GRADES_WITH_FEES.find(g => g.grade.toLowerCase() === c.grade.toLowerCase());
+                      const candFee = currentFeeItem ? currentFeeItem.fee : 6050;
+
+                      return (
+                        <tr 
+                          key={c.id || idx} 
+                          className={idx % 2 === 0 ? "bg-white hover:bg-amber-50/40" : "bg-slate-50/80 hover:bg-amber-50/40"}
+                        >
+                          <td className="py-3 px-3 text-center font-bold text-slate-500 border-r border-slate-200">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-slate-900 border-r border-slate-200">
+                            {c.firstName} {c.lastName}
+                          </td>
+                          <td className="py-3 px-3 text-slate-700 border-r border-slate-200 font-mono">
+                            {c.dob || "01/01/2000"}
+                          </td>
+                          <td className="py-3 px-3 text-center border-r border-slate-200">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              c.gender === "F" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"
+                            }`}>
+                              {c.gender}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 border-r border-slate-200">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                              c.examSuite === "Rock & Pop" ? "bg-purple-100 text-purple-800" : "bg-amber-100 text-amber-900"
+                            }`}>
+                              {c.examSuite}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-medium text-slate-800 border-r border-slate-200">
+                            {c.instrument}
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-slate-800 border-r border-slate-200">
+                            {c.grade}
+                          </td>
+                          <td className="py-3 px-4 text-slate-800 border-r border-slate-200">
+                            {c.hasNoSchool || !c.schoolName ? (
+                              <span className="italic text-slate-400">None (Independent)</span>
+                            ) : (
+                              <span className="font-semibold text-slate-900">{c.schoolName}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-slate-900 font-mono">
+                            ₹{candFee.toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                      <td colSpan={7} className="py-3 px-4 text-slate-700 text-right">
+                        Total Candidates: <span className="text-slate-950 font-black">{candidates.length} Student{candidates.length > 1 ? "s" : ""}</span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-700 text-right uppercase text-[11px] tracking-wider">
+                        Total Amount Payable:
+                      </td>
+                      <td className="py-3 px-4 text-right text-base font-black text-amber-600 font-mono">
+                        ₹{totalFee.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Submitter & Teacher Summary Info Card */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Teacher</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{teacherName}</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Submitter / Applicant</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{submitterName}</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">WhatsApp / Mobile</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{submitterMobile}</span>
+              </div>
+            </div>
+
+            {/* UPI Payment Flow Card */}
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200/90 p-6 sm:p-8">
+              <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Step 1: Pay via UPI</h2>
+                  <p className="text-xs text-slate-500">
+                    Use Google Pay, PhonePe, Paytm, or BHIM. Amount is pre-filled.
+                  </p>
+                </div>
+              </div>
+
+              {/* Total Calculation Card */}
+              <div className="mt-6 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-6 text-slate-950 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-950 bg-amber-300/60 px-2.5 py-0.5 rounded-full">
+                      Total Fee Payable
+                    </span>
+                    <div className="text-3xl sm:text-4xl font-black tracking-tight mt-1">
+                      ₹{totalFee.toLocaleString("en-IN")}
+                    </div>
+                    <p className="text-xs text-amber-950/80 mt-1">
+                      For {candidates.length} Candidate{candidates.length > 1 ? "s" : ""}
+                    </p>
+                  </div>
+
+                  {/* Mobile Direct Pay Button */}
+                  <a
+                    href={upiPayLink}
+                    className="inline-flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 active:scale-95 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-all text-sm shrink-0 cursor-pointer"
+                  >
+                    <CreditCard className="w-4 h-4 text-amber-400" />
+                    Pay ₹{totalFee.toLocaleString("en-IN")} via UPI App
+                  </a>
+                </div>
+              </div>
+
+              {/* QR Code & Copy UPI Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-center">
+                {/* QR Code */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col items-center text-center">
+                  <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200">
+                    <img
+                      src={upiQrUrl}
+                      alt="UPI QR Code"
+                      className="w-48 h-48 object-contain"
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700 mt-3 flex items-center gap-1.5">
+                    <QrCode className="w-4 h-4 text-amber-600" />
+                    Scan with any UPI App to Pay
+                  </span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">Google Pay • PhonePe • Paytm • BHIM</span>
+                </div>
+
+                {/* UPI Details & Copy */}
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">UPI ID / VPA</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono font-bold text-sm text-slate-900 break-all">{DEFAULT_UPI_ID}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyUpi}
+                        className="ml-2 inline-flex items-center gap-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer"
+                      >
+                        {copiedUpi ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Payment Reference Note */}
+                  <div>
+                    <label htmlFor={`${formId}-payRef`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      UPI Reference / UTR Number <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      id={`${formId}-payRef`}
+                      type="text"
+                      value={paymentRef}
+                      onChange={e => setPaymentRef(e.target.value)}
+                      placeholder="e.g. 12-digit UPI Ref / Transaction ID"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                    />
+                  </div>
+
+                  {/* Screenshot Upload */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Upload Payment Screenshot <span className="text-slate-400 font-normal">(Receipt proof)</span>
+                    </label>
+                    <div className="border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-2xl p-4 text-center bg-slate-50 hover:bg-amber-50/20 transition-all cursor-pointer relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleScreenshotChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      {paymentScreenshot ? (
+                        <div className="flex items-center justify-center gap-3">
+                          <img
+                            src={paymentScreenshot}
+                            alt="Screenshot preview"
+                            className="w-12 h-12 object-cover rounded-lg border border-slate-200"
+                          />
+                          <div className="text-left">
+                            <span className="text-xs font-bold text-slate-800 block truncate max-w-[200px]">
+                              {screenshotName || "Screenshot Uploaded"}
+                            </span>
+                            <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> {proofSaved ? "Saved to server" : "Ready"}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <Upload className="w-6 h-6 text-slate-400 mb-1" />
+                          <span className="text-xs font-bold text-slate-700">Click to select screenshot</span>
+                          <span className="text-[11px] text-slate-500">PNG, JPG, or screenshot from phone</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* WhatsApp Verification Banner (Step 2 of Payment) */}
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300/80 rounded-3xl p-6 sm:p-8 shadow-sm">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-2">
+                    <Send className="w-3.5 h-3.5 text-emerald-700" />
+                    Step 2: WhatsApp Verification
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold text-emerald-950">
+                    Send Payment Screenshot to +91 6282920294
+                  </h3>
+                  <p className="text-xs sm:text-sm text-emerald-800 mt-1 max-w-xl">
+                    Click the button below to open WhatsApp with your candidate breakdown pre-formatted. Simply attach your payment screenshot to complete enrollment.
+                  </p>
+                </div>
+
+                <a
+                  href={submitSuccess?.summary?.whatsappUrl || getWhatsAppLink()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-4 px-8 rounded-2xl shadow-lg shadow-emerald-600/25 transition-all text-sm sm:text-base shrink-0 cursor-pointer"
+                >
+                  <Phone className="w-5 h-5" />
+                  Open WhatsApp (6282920294)
+                </a>
+              </div>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setCurrentStep("form")}
+                className="text-xs font-bold text-slate-600 hover:text-slate-900 underline underline-offset-4 cursor-pointer"
+              >
+                ← Back to Edit Details
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentStep("form");
+                  setSubmitSuccess(null);
+                  setPaymentScreenshot(null);
+                  setScreenshotName(null);
+                  setCandidates([
+                    {
+                      id: "c-1",
+                      firstName: "",
+                      lastName: "",
+                      dob: "",
+                      gender: "M",
+                      examSuite: "Classical & Jazz",
+                      instrument: "Electronic Keyboard",
+                      grade: "Grade 1",
+                      schoolName: "",
+                      hasNoSchool: false
+                    }
+                  ]);
+                }}
+                className="text-xs font-bold text-amber-800 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-4 py-2.5 rounded-xl border border-amber-300 transition-all cursor-pointer"
+              >
+                + Enroll Another Candidate or Group
+              </button>
+            </div>
           </div>
         ) : (
+          /* ------------------------------------------------------------- */
+          /* STEP 1: FORM ENTRY (CANDIDATES FIRST, CONTACT DETAILS SECOND)  */
+          /* ------------------------------------------------------------- */
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* Error Banner */}
             {errorMsg && (
@@ -433,7 +801,7 @@ export default function PublicEnrollPage() {
                       Candidate Details ({candidates.length})
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Add candidate(s). Music school name for certificate is required per student (or select No Music School).
+                      Add candidate(s). Music school name auto-populates for subsequent candidates.
                     </p>
                   </div>
                 </div>
@@ -652,9 +1020,22 @@ export default function PublicEnrollPage() {
                       {/* Music School Name for Certificate (Mandatory unless "No Music School" is clicked) */}
                       <div className="sm:col-span-2">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
-                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Music School Name for Certificate <span className="text-rose-500">*</span>
-                          </label>
+                          <div className="flex items-center gap-2">
+                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                              Music School Name for Certificate <span className="text-rose-500">*</span>
+                            </label>
+                            {candidates.length > 1 && cand.schoolName && !cand.hasNoSchool && (
+                              <button
+                                type="button"
+                                onClick={() => applySchoolToAll(cand.schoolName)}
+                                className="text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300 transition-all cursor-pointer"
+                                title="Copy this school name to all other student cards"
+                              >
+                                ✨ Apply to all
+                              </button>
+                            )}
+                          </div>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -710,7 +1091,7 @@ export default function PublicEnrollPage() {
                         <span className="text-[11px] text-slate-500 mt-1 block">
                           {cand.hasNoSchool
                             ? "Certificate will display student name only without any school or academy."
-                            : 'Exact music school name to be printed on certificate (e.g. "National"). Click "No Music School" if not applicable.'}
+                            : 'Exact music school name to be printed on certificate (e.g. "National"). Auto-populates for next candidates.'}
                         </span>
                       </div>
                     </div>
@@ -839,170 +1220,7 @@ export default function PublicEnrollPage() {
               </div>
             </div>
 
-            {/* Section 3: UPI Payment & Fee Summary (THIRD SECTION) */}
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-6 sm:p-8">
-              <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
-                <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow">
-                  3
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Payment via UPI</h2>
-                  <p className="text-xs text-slate-500">Pay directly using any UPI app (GPay, PhonePe, Paytm, BHIM) and upload screenshot</p>
-                </div>
-              </div>
-
-              {/* Total Calculation Card */}
-              <div className="mt-6 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-6 text-slate-950 shadow-md">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-950 bg-amber-300/60 px-2.5 py-0.5 rounded-full">
-                      Total Fee Payable
-                    </span>
-                    <div className="text-3xl sm:text-4xl font-black tracking-tight mt-1">
-                      ₹{totalFee.toLocaleString("en-IN")}
-                    </div>
-                    <p className="text-xs text-amber-950/80 mt-1">
-                      Total {candidates.length} candidate(s): {candidates.filter(c => c.examSuite === "Classical & Jazz").length} Classical & Jazz, {candidates.filter(c => c.examSuite === "Rock & Pop").length} Rock & Pop
-                    </p>
-                  </div>
-
-                  {/* Mobile Direct Pay Button */}
-                  <a
-                    href={upiPayLink}
-                    className="inline-flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 active:scale-95 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-all text-sm shrink-0 cursor-pointer"
-                  >
-                    <CreditCard className="w-4 h-4 text-amber-400" />
-                    Pay ₹{totalFee.toLocaleString("en-IN")} via UPI App
-                  </a>
-                </div>
-              </div>
-
-              {/* QR Code & Copy UPI Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-center">
-                {/* QR Code */}
-                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col items-center text-center">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200">
-                    <img
-                      src={upiQrUrl}
-                      alt="UPI QR Code"
-                      className="w-48 h-48 object-contain"
-                    />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 mt-3 flex items-center gap-1.5">
-                    <QrCode className="w-4 h-4 text-amber-600" />
-                    Scan with any UPI App to Pay
-                  </span>
-                  <span className="text-[11px] text-slate-500 mt-0.5">Google Pay • PhonePe • Paytm • BHIM</span>
-                </div>
-
-                {/* UPI Details & Copy */}
-                <div className="space-y-4">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">UPI ID / VPA</span>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="font-mono font-bold text-sm text-slate-900 break-all">{DEFAULT_UPI_ID}</span>
-                      <button
-                        type="button"
-                        onClick={handleCopyUpi}
-                        className="ml-2 inline-flex items-center gap-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer"
-                      >
-                        {copiedUpi ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="text-emerald-700">Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Payment Reference Note */}
-                  <div>
-                    <label htmlFor={`${formId}-payRef`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                      UPI Reference / UTR Number <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      id={`${formId}-payRef`}
-                      type="text"
-                      value={paymentRef}
-                      onChange={e => setPaymentRef(e.target.value)}
-                      placeholder="e.g. UPI Ref / Transaction ID"
-                      className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                    />
-                  </div>
-
-                  {/* Screenshot Upload */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                      Upload Payment Screenshot <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-2xl p-4 text-center bg-slate-50 hover:bg-amber-50/20 transition-all cursor-pointer relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleScreenshotChange}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      {paymentScreenshot ? (
-                        <div className="flex items-center justify-center gap-3">
-                          <img
-                            src={paymentScreenshot}
-                            alt="Screenshot preview"
-                            className="w-12 h-12 object-cover rounded-lg border border-slate-200"
-                          />
-                          <div className="text-left">
-                            <span className="text-xs font-bold text-slate-800 block truncate max-w-[200px]">
-                              {screenshotName || "Screenshot Uploaded"}
-                            </span>
-                            <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> Ready to submit
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <Upload className="w-6 h-6 text-slate-400 mb-1" />
-                          <span className="text-xs font-bold text-slate-700">Click to select screenshot</span>
-                          <span className="text-[11px] text-slate-500">PNG, JPG, or screenshot from phone</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Direct WhatsApp Action Banner */}
-              <div className="mt-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3 text-center sm:text-left">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                    <Phone className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-emerald-950">Send Screenshot to WhatsApp</h4>
-                    <p className="text-[11px] text-emerald-800">
-                      You can also share your payment proof directly to <strong>6282920294</strong>
-                    </p>
-                  </div>
-                </div>
-
-                <a
-                  href={getWhatsAppLink()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-all shadow-sm shrink-0 cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  WhatsApp 6282920294
-                </a>
-              </div>
-            </div>
-
-            {/* Submit Button */}
+            {/* Submit Button to Proceed to Next Page (Payment Portal) */}
             <div className="pt-2">
               <button
                 type="submit"
@@ -1012,17 +1230,17 @@ export default function PublicEnrollPage() {
                 {submitting ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Submitting & Syncing with Google Sheets...</span>
+                    <span>Submitting & Saving to Google Sheets...</span>
                   </>
                 ) : (
                   <>
-                    <span>Submit Exam Enrollment ({candidates.length} Student{candidates.length > 1 ? "s" : ""})</span>
+                    <span>Submit & Proceed to Payment Portal ({candidates.length} Student{candidates.length > 1 ? "s" : ""})</span>
                     <ChevronRight className="w-5 h-5 text-amber-400" />
                   </>
                 )}
               </button>
               <p className="text-center text-xs text-slate-500 mt-2.5">
-                Entries are instantly recorded in the Trinity Master Google Sheet (highlighted in yellow) & database.
+                Submitting records entries directly into the Master Google Sheet and displays the complete Excel summary table and UPI payment portal on the next page.
               </p>
             </div>
           </form>
