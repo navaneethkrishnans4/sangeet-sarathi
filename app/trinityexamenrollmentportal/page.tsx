@@ -36,6 +36,7 @@ interface CandidateForm {
   dob: string;
   gender: "M" | "F";
   examSuite: "Classical & Jazz" | "Rock & Pop";
+  pathway?: "Technical Work Pathway" | "Repertoire-Only Pathway";
   instrument: string;
   grade: string;
   schoolName: string;
@@ -175,6 +176,7 @@ export default function PublicEnrollPage() {
       dob: "",
       gender: "M",
       examSuite: "Classical & Jazz",
+      pathway: "Technical Work Pathway",
       instrument: "Electronic Keyboard",
       grade: "Grade 1",
       schoolName: "",
@@ -231,6 +233,7 @@ export default function PublicEnrollPage() {
         dob: "",
         gender: "M",
         examSuite: "Classical & Jazz",
+        pathway: "Technical Work Pathway",
         instrument: "Electronic Keyboard",
         grade: "Grade 1",
         schoolName: latestSchool,
@@ -260,6 +263,9 @@ export default function PublicEnrollPage() {
             updated[index].instrument = "Drums";
           }
         } else if (value === "Classical & Jazz") {
+          if (!updated[index].pathway) {
+            updated[index].pathway = "Technical Work Pathway";
+          }
           if (updated[index].instrument === "Drums") {
             updated[index].instrument = "Drum Kit";
           } else if (!CLASSICAL_INSTRUMENTS.includes(updated[index].instrument)) {
@@ -367,6 +373,7 @@ export default function PublicEnrollPage() {
       lastName: toTitleCase(c.lastName),
       dob: validateDob(c.dob).formatted || c.dob.trim(),
       schoolName: c.hasNoSchool ? "" : toSchoolTitleCase(c.schoolName),
+      pathway: c.examSuite === "Classical & Jazz" ? (c.pathway || "Technical Work Pathway") : undefined,
       instrument: c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum")
         ? "Drums"
         : (c.examSuite === "Classical & Jazz" && c.instrument.toLowerCase().includes("drum") ? "Drum Kit" : c.instrument)
@@ -401,6 +408,7 @@ export default function PublicEnrollPage() {
             dob: validateDob(c.dob).formatted || c.dob,
             gender: c.gender,
             examSuite: c.examSuite,
+            pathway: c.examSuite === "Classical & Jazz" ? (c.pathway || "Technical Work Pathway") : undefined,
             instrument: c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum")
               ? "Drums"
               : (c.examSuite === "Classical & Jazz" && c.instrument.toLowerCase().includes("drum") ? "Drum Kit" : c.instrument),
@@ -626,6 +634,11 @@ export default function PublicEnrollPage() {
                             }`}>
                               {c.examSuite}
                             </span>
+                            {c.examSuite === "Classical & Jazz" && (
+                              <span className="block text-[10px] text-amber-800 font-bold mt-1">
+                                {c.pathway === "Repertoire-Only Pathway" ? "🎵 Repertoire-Only" : "🎼 Technical Work"}
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4 font-medium text-slate-800 border-r border-slate-200">
                             {finalInst}
@@ -1150,6 +1163,57 @@ export default function PublicEnrollPage() {
                         </div>
                       </div>
 
+                      {/* Classical & Jazz Pathway Selection */}
+                      {cand.examSuite === "Classical & Jazz" && (
+                        <div className="sm:col-span-2 bg-gradient-to-r from-amber-50/90 to-yellow-50/90 p-4 sm:p-5 rounded-2xl border-2 border-amber-300 shadow-sm animate-in fade-in">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <label className="block text-xs font-black uppercase tracking-wider text-amber-950">
+                              Classical & Jazz Exam Pathway <span className="text-rose-500">*</span>
+                            </label>
+                            <span className="text-[11px] font-bold text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+                              Choose 1 of 2 Pathways
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button
+                              type="button"
+                              onClick={() => updateCandidate(index, "pathway", "Technical Work Pathway")}
+                              className={`p-3.5 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                                (cand.pathway || "Technical Work Pathway") === "Technical Work Pathway"
+                                  ? "bg-amber-500 text-slate-950 border-amber-600 shadow-md ring-2 ring-amber-500/20"
+                                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
+                              }`}
+                            >
+                              <div className="text-xl shrink-0">🎼</div>
+                              <div>
+                                <div className="text-sm font-black">Technical Work Pathway</div>
+                                <div className={`text-xs mt-0.5 ${(cand.pathway || "Technical Work Pathway") === "Technical Work Pathway" ? "text-slate-950 font-semibold" : "text-slate-500"}`}>
+                                  Performance of 3 Pieces + Technical Work (Scales, Arpeggios & Exercises)
+                                </div>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => updateCandidate(index, "pathway", "Repertoire-Only Pathway")}
+                              className={`p-3.5 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                                cand.pathway === "Repertoire-Only Pathway"
+                                  ? "bg-amber-500 text-slate-950 border-amber-600 shadow-md ring-2 ring-amber-500/20"
+                                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
+                              }`}
+                            >
+                              <div className="text-xl shrink-0">🎵</div>
+                              <div>
+                                <div className="text-sm font-black">Repertoire-Only Pathway</div>
+                                <div className={`text-xs mt-0.5 ${cand.pathway === "Repertoire-Only Pathway" ? "text-slate-950 font-semibold" : "text-slate-500"}`}>
+                                  Performance of 4 Pieces (No Technical Work required)
+                                </div>
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Instrument / Subject */}
                       <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
@@ -1493,7 +1557,14 @@ export default function PublicEnrollPage() {
                               </td>
                               <td className="py-2.5 px-3 font-mono text-slate-700">{c.dob}</td>
                               <td className="py-2.5 px-2 text-center font-bold text-slate-700">{c.gender}</td>
-                              <td className="py-2.5 px-3 font-semibold text-slate-800">{c.examSuite}</td>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                <div>{c.examSuite}</div>
+                                {c.examSuite === "Classical & Jazz" && (
+                                  <div className="text-[10px] text-amber-700 font-bold mt-0.5">
+                                    {c.pathway === "Repertoire-Only Pathway" ? "🎵 Repertoire-Only" : "🎼 Technical Work"}
+                                  </div>
+                                )}
+                              </td>
                               <td className="py-2.5 px-3 font-medium text-slate-800">{instName}</td>
                               <td className="py-2.5 px-3 font-bold text-slate-900">{c.grade}</td>
                               <td className="py-2.5 px-3 text-slate-800">

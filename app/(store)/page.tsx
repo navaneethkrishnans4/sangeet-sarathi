@@ -6,6 +6,132 @@ export default function Home() {
   return (
     <main>
       <Hero />
+
+      {/* Trinity College London Digital Exam Enrollment Portal Section */}
+      <section className="container" style={{ padding: '3.5rem 1.5rem 2rem 1.5rem' }}>
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98))',
+          border: '2px solid rgba(245, 158, 11, 0.7)',
+          borderRadius: '28px',
+          padding: '2.5rem 2rem',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(245, 158, 11, 0.15)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2rem'
+        }}>
+          {/* Top Branding Bar with National Academy of Music & Trinity Logos */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1.5rem',
+            paddingBottom: '1.5rem',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.12)'
+          }}>
+            {/* National Academy of Music Logo Card */}
+            <div style={{
+              background: '#ffffff',
+              padding: '0.6rem 1.25rem',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              boxShadow: '0 4px 15px rgba(0, 0, 0, 0.25)'
+            }}>
+              <img
+                src="/images/national-academy-of-music.png"
+                alt="National Academy of Music"
+                style={{ height: '42px', width: 'auto', objectFit: 'contain' }}
+              />
+            </div>
+
+            {/* Official Centre Badge */}
+            <div style={{ textAlign: 'center' }}>
+              <span style={{
+                background: 'rgba(245, 158, 11, 0.18)',
+                border: '1px solid rgba(245, 158, 11, 0.5)',
+                color: '#fbbf24',
+                padding: '0.45rem 1.2rem',
+                borderRadius: '999px',
+                fontSize: '0.85rem',
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase'
+              }}>
+                Exam Centre: Kochi (4048)
+              </span>
+            </div>
+
+            {/* Trinity College London Logo Card */}
+            <div style={{
+              background: '#ffffff',
+              padding: '0.6rem 1.25rem',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              boxShadow: '0 4px 15px rgba(0, 0, 0, 0.25)'
+            }}>
+              <img
+                src="/images/trinity-college-london.png"
+                alt="Trinity College London"
+                style={{ height: '36px', width: 'auto', objectFit: 'contain' }}
+              />
+            </div>
+          </div>
+
+          {/* Title, Details & CTA Action */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '2rem'
+          }}>
+            <div style={{ maxWidth: '660px' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#fbbf24', marginBottom: '0.35rem' }}>
+                Official Examination Registration
+              </div>
+              <h2 style={{
+                fontSize: 'clamp(1.6rem, 3.2vw, 2.3rem)',
+                fontWeight: 900,
+                color: '#ffffff',
+                marginBottom: '0.75rem',
+                lineHeight: 1.25
+              }}>
+                Trinity College London Digital Exam Enrollment Portal
+              </h2>
+              <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: 1.6, margin: 0 }}>
+                Direct student enrollment for Trinity Digital Exams (Classical & Jazz and Rock & Pop). Choose Technical Work or Repertoire-Only pathways, verify entries, and complete payment directly via UPI.
+              </p>
+            </div>
+
+            <Link
+              href="/trinityexamenrollmentportal"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                color: '#0f172a',
+                fontWeight: 900,
+                fontSize: '1.05rem',
+                padding: '1.15rem 2.4rem',
+                borderRadius: '16px',
+                textDecoration: 'none',
+                boxShadow: '0 10px 28px rgba(245, 158, 11, 0.45)',
+                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                flexShrink: 0,
+                cursor: 'pointer'
+              }}
+            >
+              <span>Enter Enrollment Portal</span>
+              <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>→</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <CategoryGrid />
 
       {/* Legacy & Trust Section - Using the new copy */}
