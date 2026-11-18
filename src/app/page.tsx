@@ -5,21 +5,60 @@ import {
   BookOpen, 
   FileSpreadsheet, 
   Database,
-  GraduationCap
+  GraduationCap,
+  ArrowRight
 } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-10 flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-10 flex flex-col items-center justify-center">
       
       {/* Header Section */}
-      <div className="max-w-4xl w-full text-center mb-16 space-y-4">
-        <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+      <div className="max-w-4xl w-full text-center mb-8 space-y-3">
+        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
           Trinity Master Dashboard
         </h1>
-        <p className="text-slate-400 text-lg">
+        <p className="text-slate-400 text-base sm:text-lg">
           Central hub for enrolments, reconciliation, and financial insights.
         </p>
+      </div>
+
+      {/* BIG TOP BUTTON: Trinity Exam Enrollment Portal */}
+      <div className="max-w-5xl w-full mb-10">
+        <Link 
+          href="/trinityexamenrollmentportal" 
+          className="group block cursor-pointer"
+        >
+          <div className="p-[2px] rounded-3xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 shadow-2xl shadow-amber-500/20 hover:shadow-amber-500/40 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]">
+            <div className="bg-slate-950/95 hover:bg-slate-900/90 rounded-[22px] p-6 sm:p-7 flex flex-col sm:flex-row items-center justify-between gap-5 transition-colors">
+              <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black shrink-0 shadow-lg group-hover:rotate-6 transition-transform">
+                  <GraduationCap className="w-9 h-9" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-amber-950 bg-amber-400 px-2.5 py-0.5 rounded-full font-mono">
+                      Official Portal
+                    </span>
+                    <span className="text-xs text-amber-200/80 font-semibold">
+                      Trinity College London • Centre Kochi (4048)
+                    </span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white group-hover:text-amber-300 transition-colors">
+                    Trinity Exam Enrollment Portal
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                    Candidate digital exam registration, instant fee calculation, and direct UPI payment gateway.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-4 rounded-xl text-base shrink-0 shadow-xl group-hover:translate-x-1 transition-all">
+                <span>Enter Enrollment Portal</span>
+                <ArrowRight className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Main Navigation Grid */}
@@ -91,7 +130,7 @@ export default function Home() {
         </Link>
 
         {/* Public Enrollment Form Card */}
-        <Link href="/enroll" className="group" target="_blank">
+        <Link href="/trinityexamenrollmentportal" className="group" target="_blank">
           <div className="h-full bg-slate-800/50 backdrop-blur-md border border-amber-500/30 rounded-3xl p-8 hover:bg-slate-700/50 hover:border-amber-400 transition-all duration-300 shadow-xl hover:shadow-amber-500/10 cursor-pointer flex flex-col relative overflow-hidden">
             <div className="absolute top-4 right-4 bg-amber-500/20 text-amber-300 text-xs font-semibold px-2.5 py-1 rounded-full border border-amber-500/30">
               Public Portal
@@ -99,9 +138,9 @@ export default function Home() {
             <div className="bg-amber-500/20 p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
               <GraduationCap className="w-8 h-8 text-amber-400" />
             </div>
-            <h2 className="text-2xl font-bold mb-2 text-white">Public Enrollment Form</h2>
+            <h2 className="text-2xl font-bold mb-2 text-white">Trinity Exam Enrollment Portal</h2>
             <p className="text-slate-400 flex-grow">
-              Shareable link for teachers & parents. Includes direct UPI payment, WhatsApp receipt upload, and yellow highlight Google Sheet sync.
+              Shareable link for teachers & parents. Includes direct UPI payment, WhatsApp receipt notification, and instant verification summary.
             </p>
           </div>
         </Link>
