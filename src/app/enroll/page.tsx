@@ -451,6 +451,9 @@ export default function PublicEnrollPage() {
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-1">
                 National Academy of Music
               </h1>
+              <p className="text-sm sm:text-base font-bold text-amber-400 mt-0.5">
+                Trinity College of London Digital Exam Enrollment Form
+              </p>
               <p className="text-xs sm:text-sm text-slate-300">
                 Digital Examination Entries
               </p>
@@ -1228,56 +1231,16 @@ export default function PublicEnrollPage() {
                             </button>
                           </div>
                         ) : (
-                          <div className="space-y-2">
-                            <div className="relative">
-                              <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                              <input
-                                type="text"
-                                required={!cand.hasNoSchool}
-                                value={cand.schoolName}
-                                onChange={e => updateCandidate(index, "schoolName", e.target.value)}
-                                placeholder="e.g. National Academy of Music"
-                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
-                              />
-                            </div>
-
-                            {/* Logo Display for National Academy of Music */}
-                            {cand.schoolName && cand.schoolName.toLowerCase().includes("national") && (
-                              <div className="p-3 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between gap-3 shadow-sm animate-in fade-in">
-                                <div className="flex items-center gap-3">
-                                  <img
-                                    src="/images/national-academy-of-music.png"
-                                    alt="National Academy of Music"
-                                    className="h-8 sm:h-9 object-contain"
-                                  />
-                                  <div>
-                                    <span className="text-xs font-bold text-emerald-950 block">National Academy of Music</span>
-                                    <span className="text-[10px] text-emerald-700">Official Partner Academy</span>
-                                  </div>
-                                </div>
-                                <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full shrink-0">
-                                  ✓ Verified Partner
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Quick Select Chip for National Academy of Music */}
-                            {!cand.schoolName && (
-                              <div className="flex items-center gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => updateCandidate(index, "schoolName", "National Academy of Music")}
-                                  className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 transition-all cursor-pointer shadow-sm"
-                                >
-                                  <img
-                                    src="/images/national-academy-of-music.png"
-                                    alt="National Academy of Music"
-                                    className="h-3.5 object-contain"
-                                  />
-                                  <span>Select National Academy of Music</span>
-                                </button>
-                              </div>
-                            )}
+                          <div className="relative">
+                            <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                            <input
+                              type="text"
+                              required={!cand.hasNoSchool}
+                              value={cand.schoolName}
+                              onChange={e => updateCandidate(index, "schoolName", e.target.value)}
+                              placeholder="e.g. National Academy of Music"
+                              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
+                            />
                           </div>
                         )}
                         <span className="text-[11px] text-slate-500 mt-1 block">
