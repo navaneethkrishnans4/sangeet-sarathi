@@ -372,26 +372,18 @@ export async function POST(req: Request) {
     }
 
     // 4. Construct WhatsApp Message URL for 6282920294
-    const candListText = processedCandidates
-      .map((c, i) => `${i + 1}. ${c.firstName} ${c.lastName} - ${c.grade} ${c.instrument} (${c.examType})${c.schoolName ? ` [School: ${c.schoolName}]` : " [No School]"}`)
-      .join("\n");
-
-    const waMessage = `Hello Trinity Exam Centre,
-
-I have submitted exam entries on the enrollment portal:
-
-Submitter Email: ${cleanSubEmail}
-Submitter: ${cleanSubName}
-Mobile: ${cleanSubMobile}
-Teacher: ${toTitleCase(effTeacher)}
-Total Candidates: ${processedCandidates.length}
-Total Fee: ₹${totalFee.toLocaleString("en-IN")}
-Payment Ref: ${paymentRefNote || "UPI Payment"}
-
-Candidates Breakdown:
-${candListText}
-
-Attaching payment screenshot below for verification.`;
+    // Format: "I have submitted form for (Candidates name) and (Grade) , total : (total fee)"
+    let waMessage = "";
+    if (processedCandidates.length === 1) {
+      const c = processedCandidates[0];
+      const name = `${c.firstName} ${c.lastName}`.trim();
+      waMessage = `I have submitted form for ${name} and ${c.grade} , total : ₹${totalFee.toLocaleString("en-IN")}`;
+    } else {
+      const list = processedCandidates
+        .map(c => `${c.firstName} ${c.lastName} and ${c.grade}`)
+        .join(", ");
+      waMessage = `I have submitted form for ${list} , total : ₹${totalFee.toLocaleString("en-IN")}`;
+    }
 
     const whatsappUrl = `https://wa.me/916282920294?text=${encodeURIComponent(waMessage)}`;
 
