@@ -432,30 +432,29 @@ export default function PublicEnrollPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900 antialiased selection:bg-amber-100 selection:text-amber-900 pb-20">
       {/* Top Header / Branding Banner */}
       <header className="bg-slate-900 text-white border-b border-slate-800 shadow-lg">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-center sm:text-left">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center text-slate-950 font-black text-2xl shadow-md ring-4 ring-white/10 shrink-0">
-              T
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-7 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+            <div className="bg-white p-2 sm:p-2.5 rounded-2xl shadow-md border border-slate-700/60 flex items-center justify-center shrink-0">
+              <img
+                src="/images/national-academy-of-music.png"
+                alt="National Academy of Music"
+                className="h-10 sm:h-12 w-auto object-contain"
+              />
             </div>
             <div>
               <div className="flex items-center justify-center sm:justify-start gap-2">
                 <span className="text-xs font-semibold uppercase tracking-widest text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-500/30">
                   Official Portal
                 </span>
-                <span className="text-xs text-slate-400">Centre 4048 (Kochi)</span>
+                <span className="text-xs text-slate-400">Trinity College London (Centre 4048)</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-1">
-                Trinity College London Exam Enrollment
+                National Academy of Music
               </h1>
               <p className="text-xs sm:text-sm text-slate-300">
-                Digital Examination Entries & Direct UPI / Bank Verification
+                Digital Examination Entries
               </p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Master Google Sheet Sync</span>
           </div>
         </div>
       </header>
@@ -523,7 +522,7 @@ export default function PublicEnrollPage() {
                     Welcome to the Exam Payment Portal
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-                    Your candidates under Teacher <strong className="text-slate-900">{toTitleCase(teacherName)}</strong> are saved to the Trinity Master Google Sheet (highlighted in yellow).
+                    Your candidates under Teacher <strong className="text-slate-900">{toTitleCase(teacherName)}</strong> are successfully recorded for Digital Examination Entries.
                   </p>
                 </div>
               </div>
