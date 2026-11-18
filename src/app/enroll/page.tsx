@@ -461,12 +461,12 @@ export default function PublicEnrollPage() {
               </div>
             </div>
 
-            {/* Right Section: Trinity College London Official Centre Logo */}
+            {/* Right Section: Trinity College London Official Logo */}
             <div className="flex items-center justify-center shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-6">
               <img
                 src="/images/trinity-college-london.png"
-                alt="Trinity College London Registered Exam Centre 63868"
-                className="h-14 sm:h-16 w-auto object-contain"
+                alt="Trinity College London"
+                className="h-10 sm:h-12 w-auto object-contain"
               />
             </div>
           </div>
