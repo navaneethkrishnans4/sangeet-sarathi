@@ -11,20 +11,22 @@ import {
   Send, 
   Copy, 
   Check, 
-  Upload, 
   AlertCircle, 
   Phone, 
   User, 
   Mail, 
   Building2, 
   GraduationCap, 
-  Calendar,
-  Sparkles,
-  QrCode,
-  ChevronRight,
-  ArrowRight,
-  Printer,
-  Table as TableIcon
+  Calendar, 
+  Sparkles, 
+  QrCode, 
+  ChevronRight, 
+  ArrowRight, 
+  Printer, 
+  Table as TableIcon,
+  X,
+  Eye,
+  Landmark
 } from "lucide-react";
 
 interface CandidateForm {
@@ -40,9 +42,84 @@ interface CandidateForm {
   hasNoSchool: boolean;
 }
 
+// Capitalization: Title Case with single-letter uppercase (e.g. Navneeth krishnan s -> Navneeth Krishnan S)
+function toTitleCase(str: string): string {
+  if (!str) return "";
+  return str
+    .trim()
+    .split(/\s+/)
+    .map(word => {
+      if (word.length === 1) return word.toUpperCase();
+      if (/^[A-Za-z](\.[A-Za-z])*\.?$/.test(word)) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
+// Music School exceptions (e.g. National Academy of Music, Notes n Tones Music Academy, Notes n Chords)
+function toSchoolTitleCase(str: string): string {
+  if (!str) return "";
+  const lowerExceptions = new Set(["of", "n", "and", "&", "the", "in", "at", "for", "on", "to", "by"]);
+  const words = str.trim().split(/\s+/);
+  return words
+    .map((word, idx) => {
+      const lower = word.toLowerCase();
+      if (idx > 0 && lowerExceptions.has(lower)) {
+        return lower === "&" ? "&" : lower;
+      }
+      if (word.length === 1) return word.toUpperCase();
+      if (/^[A-Za-z](\.[A-Za-z])*\.?$/.test(word)) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
+// DOB Validation (1940 to current year)
+function validateDob(dobStr?: string): { valid: boolean; error?: string; formatted?: string } {
+  if (!dobStr || !dobStr.trim()) {
+    return { valid: false, error: "Date of Birth is required." };
+  }
+  const clean = dobStr.trim().replace(/[-.]/g, "/");
+  const parts = clean.split("/");
+  if (parts.length !== 3) {
+    return { valid: false, error: "Please enter Date of Birth in DD/MM/YYYY format (e.g. 18/06/2011)." };
+  }
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const year = parseInt(parts[2], 10);
+
+  const currentYear = new Date().getFullYear();
+
+  if (isNaN(day) || isNaN(month) || isNaN(year)) {
+    return { valid: false, error: "Invalid numbers in Date of Birth." };
+  }
+  if (year < 1940 || year > currentYear) {
+    return { valid: false, error: `Birth year must be between 1940 and ${currentYear} (you entered ${year}).` };
+  }
+  if (month < 1 || month > 12) {
+    return { valid: false, error: `Invalid birth month: ${month}. Must be between 1 and 12.` };
+  }
+  if (day < 1 || day > 31) {
+    return { valid: false, error: `Invalid birth day: ${day}. Must be between 1 and 31.` };
+  }
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day > daysInMonth) {
+    return { valid: false, error: `Invalid date: ${day}/${month}/${year} (month ${month} has only ${daysInMonth} days).` };
+  }
+
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  return {
+    valid: true,
+    formatted: `${pad(day)}/${pad(month)}/${year}`
+  };
+}
+
+// Classical & Jazz instruments include Drum Kit
 const CLASSICAL_INSTRUMENTS = [
   "Electronic Keyboard",
   "Piano",
+  "Drum Kit",
   "Acoustic Guitar",
   "Classical Guitar",
   "Violin",
@@ -53,8 +130,9 @@ const CLASSICAL_INSTRUMENTS = [
   "Other"
 ];
 
+// Rock & Pop instruments include Drums
 const ROCK_POP_INSTRUMENTS = [
-  "Drum Kit",
+  "Drums",
   "Vocals",
   "Acoustic Guitar",
   "Electric Guitar",
@@ -75,13 +153,17 @@ const GRADES_WITH_FEES = [
   { grade: "Grade 8", fee: 13500 },
 ];
 
-const DEFAULT_UPI_ID = process.env.NEXT_PUBLIC_UPI_ID || "6282920294@okaxis";
+const DEFAULT_UPI_ID = "mssangeetsarath@eazypay@icici";
+const BANK_ACCOUNT_NUMBER = "026205005146";
+const BANK_IFSC_CODE = "ICIC0000262";
+const BANK_BENEFICIARY = "M/s Sangeet Sarathi";
+const BANK_NAME = "ICICI Bank";
 const WHATSAPP_NUMBER = "6282920294";
 
 export default function PublicEnrollPage() {
   const formId = useId();
 
-  // Page Step: 1 = Form Entry, 2 = Payment Portal & Summary
+  // Page Step: "form" = Step 1, "payment" = Step 2
   const [currentStep, setCurrentStep] = useState<"form" | "payment">("form");
 
   // Candidates list (Section 1)
@@ -100,19 +182,18 @@ export default function PublicEnrollPage() {
     }
   ]);
 
-  // Contact & Teacher details (Section 2: Email, Submitter Name, Mobile, Teacher)
+  // Contact details (Section 2: Email, Submitter Name, Phone, Teacher)
   const [submitterEmail, setSubmitterEmail] = useState("");
   const [submitterName, setSubmitterName] = useState("");
   const [submitterMobile, setSubmitterMobile] = useState("");
   const [teacherName, setTeacherName] = useState("");
 
-  // Payment states (Payment Portal)
-  const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
-  const [screenshotName, setScreenshotName] = useState<string | null>(null);
+  // Payment portal states
   const [paymentRef, setPaymentRef] = useState("");
-  const [copiedUpi, setCopiedUpi] = useState(false);
-  const [savingProof, setSavingProof] = useState(false);
-  const [proofSaved, setProofSaved] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Review Modal state (Verification pop-up before final submit)
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -127,7 +208,6 @@ export default function PublicEnrollPage() {
 
   // Add Candidate - Auto-populates school from previous candidates
   const handleAddCandidate = () => {
-    // Find the latest non-empty school name from existing candidates
     let latestSchool = "";
     let latestNoSchool = false;
     for (let i = candidates.length - 1; i >= 0; i--) {
@@ -165,7 +245,7 @@ export default function PublicEnrollPage() {
     setCandidates(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  // Update candidate field
+  // Update candidate field with automatic Drum Kit / Drums suite mapping
   const updateCandidate = (index: number, field: keyof CandidateForm, value: any) => {
     setCandidates(prev => {
       const updated = [...prev];
@@ -173,10 +253,18 @@ export default function PublicEnrollPage() {
 
       // If suite changed, make sure instrument fits
       if (field === "examSuite") {
-        if (value === "Rock & Pop" && !ROCK_POP_INSTRUMENTS.includes(updated[index].instrument)) {
-          updated[index].instrument = "Drum Kit";
-        } else if (value === "Classical & Jazz" && !CLASSICAL_INSTRUMENTS.includes(updated[index].instrument)) {
-          updated[index].instrument = "Electronic Keyboard";
+        if (value === "Rock & Pop") {
+          if (updated[index].instrument === "Drum Kit") {
+            updated[index].instrument = "Drums";
+          } else if (!ROCK_POP_INSTRUMENTS.includes(updated[index].instrument)) {
+            updated[index].instrument = "Drums";
+          }
+        } else if (value === "Classical & Jazz") {
+          if (updated[index].instrument === "Drums") {
+            updated[index].instrument = "Drum Kit";
+          } else if (!CLASSICAL_INSTRUMENTS.includes(updated[index].instrument)) {
+            updated[index].instrument = "Electronic Keyboard";
+          }
         }
       }
 
@@ -186,76 +274,44 @@ export default function PublicEnrollPage() {
 
   // Helper to copy a typed school name to all candidate cards
   const applySchoolToAll = (schoolToApply: string) => {
+    const formatted = toSchoolTitleCase(schoolToApply);
     setCandidates(prev => prev.map(c => ({
       ...c,
-      schoolName: schoolToApply,
+      schoolName: formatted,
       hasNoSchool: false
     })));
   };
 
-  // Handle Screenshot Upload in Payment Portal
-  const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setScreenshotName(file.name);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result as string;
-      setPaymentScreenshot(base64);
-
-      // Auto-save proof to server
-      try {
-        setSavingProof(true);
-        await fetch("/api/entries/enroll/proof", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            submitterName,
-            submitterMobile,
-            paymentRefNote: paymentRef,
-            paymentScreenshotBase64: base64,
-            paymentScreenshotFileName: file.name
-          })
-        });
-        setProofSaved(true);
-      } catch (err) {
-        console.warn("Screenshot upload warning:", err);
-      } finally {
-        setSavingProof(false);
-      }
-    };
-    reader.readAsDataURL(file);
+  // Copy to clipboard helper with visual indicator
+  const handleCopy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
   };
 
-  // Copy UPI ID
-  const handleCopyUpi = () => {
-    navigator.clipboard.writeText(DEFAULT_UPI_ID);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2500);
-  };
-
-  // UPI deep link
-  const upiPayLink = `upi://pay?pa=${DEFAULT_UPI_ID}&pn=Trinity%20Kochi%20Exam%20Center&am=${totalFee}&cu=INR&tn=Trinity%20Exam%20Enrollment`;
+  // UPI deep link & QR Code
+  const upiPayLink = `upi://pay?pa=${DEFAULT_UPI_ID}&pn=Sangeet%20Sarathi&am=${totalFee}&cu=INR&tn=Trinity%20Exam%20Enrollment`;
   const upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(upiPayLink)}`;
 
-  // WhatsApp Send Link
+  // Pre-populated WhatsApp Send Link
   const getWhatsAppLink = () => {
     const candidateSummary = candidates.map((c, i) => {
-      const sch = c.hasNoSchool || !c.schoolName ? "No School" : c.schoolName;
-      return `${i + 1}. ${c.firstName} ${c.lastName} (${c.grade} ${c.instrument} - ${c.examSuite}) [School: ${sch}]`;
+      const sch = c.hasNoSchool || !c.schoolName ? "Independent (No School)" : toSchoolTitleCase(c.schoolName);
+      const inst = c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum") ? "Drums" : c.instrument;
+      return `${i + 1}. ${toTitleCase(c.firstName)} ${toTitleCase(c.lastName)} - ${c.grade} ${inst} (${c.examSuite}) [School: ${sch}]`;
     }).join("%0A");
 
-    const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries on the enrollment portal:%0A%0A*Submitter Email:* ${encodeURIComponent(submitterEmail)}%0A*Submitter:* ${encodeURIComponent(submitterName)}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Teacher Name:* ${encodeURIComponent(teacherName)}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI Payment")}%0A%0A*Candidates Breakdown:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
+    const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries and completed payment:%0A%0A*Submitter Email:* ${encodeURIComponent(submitterEmail)}%0A*Submitter:* ${encodeURIComponent(toTitleCase(submitterName))}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Teacher Name:* ${encodeURIComponent(toTitleCase(teacherName))}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI / Bank Transfer")}%0A%0A*Candidates Breakdown:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
     return `https://wa.me/91${WHATSAPP_NUMBER}?text=${msg}`;
   };
 
-  // Submit Form - Validates and transitions to Payment Portal
-  const handleSubmit = async (e: React.FormEvent) => {
+  // STEP 1: Triggered when user clicks "Review & Submit Entries"
+  // Opens the pop-up modal so the user can verify entries before actual submission
+  const handleOpenReviewModal = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    // Validation: Section 1 Candidates
+    // 1. Validation: Section 1 Candidates
     for (let i = 0; i < candidates.length; i++) {
       const c = candidates[i];
       if (!c.firstName.trim()) {
@@ -263,13 +319,17 @@ export default function PublicEnrollPage() {
         return;
       }
       if (!c.lastName.trim()) {
-        setErrorMsg(`Please enter Last Name for Candidate #${i + 1}.`);
+        setErrorMsg(`Please enter Middle & Last Name for Candidate #${i + 1}.`);
         return;
       }
-      if (!c.dob.trim()) {
-        setErrorMsg(`Please enter Date of Birth (DD/MM/YYYY) for Candidate #${i + 1}.`);
+
+      // DOB validation (1940 to current year)
+      const dobVal = validateDob(c.dob);
+      if (!dobVal.valid) {
+        setErrorMsg(`Candidate #${i + 1} (${c.firstName || "Student"}): ${dobVal.error}`);
         return;
       }
+
       // Mandatory School Name unless "No Music School" is clicked
       if (!c.hasNoSchool && !c.schoolName.trim()) {
         setErrorMsg(`Please enter Music School Name for Candidate #${i + 1} (e.g. National) or click "No Music School".`);
@@ -277,7 +337,7 @@ export default function PublicEnrollPage() {
       }
     }
 
-    // Validation: Section 2 Contact & Teacher Details (Order: Email, Submitter Name, Mobile, Teacher)
+    // 2. Validation: Section 2 Contact Details
     if (!submitterEmail.trim() || !submitterEmail.includes("@")) {
       setErrorMsg("Please enter a valid Submitter Email Address in Section 2 (Contact Details).");
       return;
@@ -295,7 +355,31 @@ export default function PublicEnrollPage() {
       return;
     }
 
+    // Normalize casing across all fields before showing review
+    setCandidates(prev => prev.map(c => ({
+      ...c,
+      firstName: toTitleCase(c.firstName),
+      lastName: toTitleCase(c.lastName),
+      dob: validateDob(c.dob).formatted || c.dob.trim(),
+      schoolName: c.hasNoSchool ? "" : toSchoolTitleCase(c.schoolName),
+      instrument: c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum")
+        ? "Drums"
+        : (c.examSuite === "Classical & Jazz" && c.instrument.toLowerCase().includes("drum") ? "Drum Kit" : c.instrument)
+    })));
+    setSubmitterName(toTitleCase(submitterName));
+    setTeacherName(toTitleCase(teacherName));
+    setSubmitterEmail(submitterEmail.trim());
+    setSubmitterMobile(submitterMobile.trim());
+
+    // Open confirmation pop-up modal
+    setShowReviewModal(true);
+  };
+
+  // STEP 2: Actual Submission from the Confirmation Pop-up Modal
+  const handleConfirmSubmit = async () => {
+    setShowReviewModal(false);
     setSubmitting(true);
+    setErrorMsg(null);
 
     try {
       const res = await fetch("/api/entries/enroll", {
@@ -303,18 +387,20 @@ export default function PublicEnrollPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           submitterEmail,
-          submitterName,
+          submitterName: toTitleCase(submitterName),
           submitterMobile,
-          teacherName,
+          teacherName: toTitleCase(teacherName),
           candidates: candidates.map(c => ({
-            firstName: c.firstName,
-            lastName: c.lastName,
-            dob: c.dob,
+            firstName: toTitleCase(c.firstName),
+            lastName: toTitleCase(c.lastName),
+            dob: validateDob(c.dob).formatted || c.dob,
             gender: c.gender,
             examSuite: c.examSuite,
-            instrument: c.instrument,
+            instrument: c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum")
+              ? "Drums"
+              : (c.examSuite === "Classical & Jazz" && c.instrument.toLowerCase().includes("drum") ? "Drum Kit" : c.instrument),
             grade: c.grade,
-            schoolName: c.hasNoSchool ? "" : c.schoolName.trim()
+            schoolName: c.hasNoSchool ? "" : toSchoolTitleCase(c.schoolName)
           })),
           paymentRefNote: paymentRef
         })
@@ -356,14 +442,14 @@ export default function PublicEnrollPage() {
                 Trinity College London Exam Enrollment
               </h1>
               <p className="text-xs sm:text-sm text-slate-300">
-                Digital Examination Entries & Direct UPI Payment Verification
+                Digital Examination Entries & Direct UPI / Bank Verification
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Direct Google Sheet Sync</span>
+            <span>Master Google Sheet Sync</span>
           </div>
         </div>
       </header>
@@ -431,7 +517,7 @@ export default function PublicEnrollPage() {
                     Welcome to the Exam Payment Portal
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-                    Your candidates under Teacher <strong className="text-slate-900">{teacherName}</strong> are saved to the Trinity Master Google Sheet (highlighted in yellow).
+                    Your candidates under Teacher <strong className="text-slate-900">{toTitleCase(teacherName)}</strong> are saved to the Trinity Master Google Sheet (highlighted in yellow).
                   </p>
                 </div>
               </div>
@@ -487,6 +573,13 @@ export default function PublicEnrollPage() {
                     {candidates.map((c, idx) => {
                       const currentFeeItem = GRADES_WITH_FEES.find(g => g.grade.toLowerCase() === c.grade.toLowerCase());
                       const candFee = currentFeeItem ? currentFeeItem.fee : 6050;
+                      const formattedName = `${toTitleCase(c.firstName)} ${toTitleCase(c.lastName)}`;
+                      const formattedSchool = c.hasNoSchool || !c.schoolName 
+                        ? "None (Independent)" 
+                        : toSchoolTitleCase(c.schoolName);
+                      const finalInst = c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum")
+                        ? "Drums"
+                        : (c.examSuite === "Classical & Jazz" && c.instrument.toLowerCase().includes("drum") ? "Drum Kit" : c.instrument);
 
                       return (
                         <tr 
@@ -497,7 +590,7 @@ export default function PublicEnrollPage() {
                             {idx + 1}
                           </td>
                           <td className="py-3 px-4 font-bold text-slate-900 border-r border-slate-200">
-                            {c.firstName} {c.lastName}
+                            {formattedName}
                           </td>
                           <td className="py-3 px-3 text-slate-700 border-r border-slate-200 font-mono">
                             {c.dob || "01/01/2000"}
@@ -517,7 +610,7 @@ export default function PublicEnrollPage() {
                             </span>
                           </td>
                           <td className="py-3 px-4 font-medium text-slate-800 border-r border-slate-200">
-                            {c.instrument}
+                            {finalInst}
                           </td>
                           <td className="py-3 px-3 font-semibold text-slate-800 border-r border-slate-200">
                             {c.grade}
@@ -526,7 +619,7 @@ export default function PublicEnrollPage() {
                             {c.hasNoSchool || !c.schoolName ? (
                               <span className="italic text-slate-400">None (Independent)</span>
                             ) : (
-                              <span className="font-semibold text-slate-900">{c.schoolName}</span>
+                              <span className="font-semibold text-slate-900">{formattedSchool}</span>
                             )}
                           </td>
                           <td className="py-3 px-4 text-right font-bold text-slate-900 font-mono">
@@ -553,7 +646,7 @@ export default function PublicEnrollPage() {
               </div>
             </div>
 
-            {/* Submitter & Teacher Summary Info Card */}
+            {/* Submitter & Teacher Summary Info Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Submitter Email</span>
@@ -561,7 +654,7 @@ export default function PublicEnrollPage() {
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Submitter / Applicant</span>
-                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{submitterName}</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{toTitleCase(submitterName)}</span>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">WhatsApp / Mobile</span>
@@ -569,20 +662,20 @@ export default function PublicEnrollPage() {
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Teacher</span>
-                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{teacherName}</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{toTitleCase(teacherName)}</span>
               </div>
             </div>
 
-            {/* UPI Payment Flow Card */}
+            {/* UPI & Bank Payment Details Card */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200/90 p-6 sm:p-8">
               <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                 <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow">
                   <CreditCard className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Step 1: Pay via UPI</h2>
+                  <h2 className="text-lg font-bold text-slate-900">Step 1: Complete Payment via UPI or Bank Transfer</h2>
                   <p className="text-xs text-slate-500">
-                    Use Google Pay, PhonePe, Paytm, or BHIM. Amount is pre-filled.
+                    Pay using Google Pay, PhonePe, Paytm, BHIM, or Direct Net Banking.
                   </p>
                 </div>
               </div>
@@ -613,7 +706,7 @@ export default function PublicEnrollPage() {
                 </div>
               </div>
 
-              {/* QR Code & Copy UPI Grid */}
+              {/* QR Code & Copyable Bank / UPI Details Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-center">
                 {/* QR Code */}
                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col items-center text-center">
@@ -628,21 +721,22 @@ export default function PublicEnrollPage() {
                     <QrCode className="w-4 h-4 text-amber-600" />
                     Scan with any UPI App to Pay
                   </span>
-                  <span className="text-[11px] text-slate-500 mt-0.5">Google Pay • PhonePe • Paytm • BHIM</span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">Google Pay • PhonePe • Paytm • BHIM • iMobile</span>
                 </div>
 
-                {/* UPI Details & Copy */}
-                <div className="space-y-4">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">UPI ID / VPA</span>
+                {/* All Copyable Payment Credentials */}
+                <div className="space-y-3.5">
+                  {/* UPI ID */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">UPI ID / VPA</span>
                     <div className="flex items-center justify-between mt-1">
                       <span className="font-mono font-bold text-sm text-slate-900 break-all">{DEFAULT_UPI_ID}</span>
                       <button
                         type="button"
-                        onClick={handleCopyUpi}
+                        onClick={() => handleCopy(DEFAULT_UPI_ID, "upi")}
                         className="ml-2 inline-flex items-center gap-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer"
                       >
-                        {copiedUpi ? (
+                        {copiedKey === "upi" ? (
                           <>
                             <Check className="w-3.5 h-3.5 text-emerald-600" />
                             <span className="text-emerald-700">Copied!</span>
@@ -657,86 +751,123 @@ export default function PublicEnrollPage() {
                     </div>
                   </div>
 
-                  {/* Payment Reference Note */}
+                  {/* Account Number */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Bank Account Number</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono font-bold text-sm text-slate-900">{BANK_ACCOUNT_NUMBER}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(BANK_ACCOUNT_NUMBER, "account")}
+                        className="ml-2 inline-flex items-center gap-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer"
+                      >
+                        {copiedKey === "account" ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* IFSC Code */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">IFSC Code</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono font-bold text-sm text-slate-900">{BANK_IFSC_CODE}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(BANK_IFSC_CODE, "ifsc")}
+                        className="ml-2 inline-flex items-center gap-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer"
+                      >
+                        {copiedKey === "ifsc" ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Beneficiary Name & Bank */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Beneficiary & Bank</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-bold text-xs text-slate-800">{BANK_BENEFICIARY} ({BANK_NAME})</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(BANK_BENEFICIARY, "beneficiary")}
+                        className="ml-2 inline-flex items-center gap-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer"
+                      >
+                        {copiedKey === "beneficiary" ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Optional UPI Ref Note */}
                   <div>
-                    <label htmlFor={`${formId}-payRef`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                      UPI Reference / UTR Number <span className="text-slate-400 font-normal">(Optional)</span>
+                    <label htmlFor={`${formId}-payRef`} className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      UPI Reference / UTR Number <span className="text-slate-400 font-normal">(Optional note)</span>
                     </label>
                     <input
                       id={`${formId}-payRef`}
                       type="text"
                       value={paymentRef}
                       onChange={e => setPaymentRef(e.target.value)}
-                      placeholder="e.g. 12-digit UPI Ref / Transaction ID"
-                      className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                      placeholder="e.g. 12-digit UTR Number"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
                     />
-                  </div>
-
-                  {/* Screenshot Upload */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                      Upload Payment Screenshot <span className="text-slate-400 font-normal">(Receipt proof)</span>
-                    </label>
-                    <div className="border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-2xl p-4 text-center bg-slate-50 hover:bg-amber-50/20 transition-all cursor-pointer relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleScreenshotChange}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      {paymentScreenshot ? (
-                        <div className="flex items-center justify-center gap-3">
-                          <img
-                            src={paymentScreenshot}
-                            alt="Screenshot preview"
-                            className="w-12 h-12 object-cover rounded-lg border border-slate-200"
-                          />
-                          <div className="text-left">
-                            <span className="text-xs font-bold text-slate-800 block truncate max-w-[200px]">
-                              {screenshotName || "Screenshot Uploaded"}
-                            </span>
-                            <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> {proofSaved ? "Saved to server" : "Ready"}
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <Upload className="w-6 h-6 text-slate-400 mb-1" />
-                          <span className="text-xs font-bold text-slate-700">Click to select screenshot</span>
-                          <span className="text-[11px] text-slate-500">PNG, JPG, or screenshot from phone</span>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* WhatsApp Verification Banner (Step 2 of Payment) */}
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300/80 rounded-3xl p-6 sm:p-8 shadow-sm">
+            {/* WhatsApp Verification Banner (Direct Screenshot Send to 6282920294) */}
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-400 rounded-3xl p-6 sm:p-8 shadow-md">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-2">
                     <Send className="w-3.5 h-3.5 text-emerald-700" />
-                    Step 2: WhatsApp Verification
+                    Step 2: Send Payment Screenshot on WhatsApp
                   </div>
-                  <h3 className="text-lg sm:text-xl font-bold text-emerald-950">
-                    Send Payment Screenshot to +91 6282920294
+                  <h3 className="text-lg sm:text-xl font-black text-emerald-950">
+                    Send Screenshot to +91 6282920294
                   </h3>
                   <p className="text-xs sm:text-sm text-emerald-800 mt-1 max-w-xl">
-                    Click the button below to open WhatsApp with your candidate breakdown pre-formatted. Simply attach your payment screenshot to complete enrollment.
+                    Once payment is done, click below to open WhatsApp. Your student names and grades will be automatically filled in the message — simply attach your payment screenshot in the chat to complete verification!
                   </p>
                 </div>
 
                 <a
-                  href={submitSuccess?.summary?.whatsappUrl || getWhatsAppLink()}
+                  href={getWhatsAppLink()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-4 px-8 rounded-2xl shadow-lg shadow-emerald-600/25 transition-all text-sm sm:text-base shrink-0 cursor-pointer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-emerald-600/30 transition-all text-sm sm:text-base shrink-0 cursor-pointer"
                 >
                   <Phone className="w-5 h-5" />
-                  Open WhatsApp (6282920294)
+                  <span>Open WhatsApp (6282920294)</span>
                 </a>
               </div>
             </div>
@@ -756,8 +887,6 @@ export default function PublicEnrollPage() {
                 onClick={() => {
                   setCurrentStep("form");
                   setSubmitSuccess(null);
-                  setPaymentScreenshot(null);
-                  setScreenshotName(null);
                   setCandidates([
                     {
                       id: "c-1",
@@ -783,7 +912,7 @@ export default function PublicEnrollPage() {
           /* ------------------------------------------------------------- */
           /* STEP 1: FORM ENTRY (CANDIDATES FIRST, CONTACT DETAILS SECOND)  */
           /* ------------------------------------------------------------- */
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleOpenReviewModal} className="space-y-8">
             {/* Error Banner */}
             {errorMsg && (
               <div className="p-4 bg-rose-50 border-l-4 border-rose-500 rounded-r-2xl flex items-start gap-3 shadow-sm animate-in fade-in">
@@ -870,7 +999,7 @@ export default function PublicEnrollPage() {
                           required
                           value={cand.firstName}
                           onChange={e => updateCandidate(index, "firstName", e.target.value)}
-                          placeholder="e.g. Thejus V or Parthiv"
+                          placeholder="e.g. Navneeth"
                           className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
                         />
                       </div>
@@ -885,7 +1014,7 @@ export default function PublicEnrollPage() {
                           required
                           value={cand.lastName}
                           onChange={e => updateCandidate(index, "lastName", e.target.value)}
-                          placeholder="e.g. Nair or Pradeep"
+                          placeholder="e.g. Krishnan S"
                           className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
                         />
                       </div>
@@ -902,10 +1031,13 @@ export default function PublicEnrollPage() {
                             required
                             value={cand.dob}
                             onChange={e => updateCandidate(index, "dob", e.target.value)}
-                            placeholder="e.g. 28/05/2010"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
+                            placeholder="e.g. 18/06/2011"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all font-mono"
                           />
                         </div>
+                        <span className="text-[11px] text-slate-500 mt-1 block">
+                          Format: DD/MM/YYYY (Birth year between 1940 and {new Date().getFullYear()})
+                        </span>
                       </div>
 
                       {/* Gender Selector */}
@@ -961,7 +1093,7 @@ export default function PublicEnrollPage() {
                             </div>
                             <div>
                               <div className="text-sm font-bold">Classical & Jazz (Digital)</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Piano, Electronic Keyboard, Acoustic Guitar, Violin</div>
+                              <div className="text-xs text-slate-500 mt-0.5">Piano, Electronic Keyboard, Drum Kit, Acoustic Guitar, Violin</div>
                             </div>
                           </button>
 
@@ -981,7 +1113,7 @@ export default function PublicEnrollPage() {
                             </div>
                             <div>
                               <div className="text-sm font-bold">Rock & Pop (Digital)</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Drum Kit, Vocals, Electric Guitar, Bass, Keyboards</div>
+                              <div className="text-xs text-slate-500 mt-0.5">Drums, Vocals, Electric Guitar, Bass, Keyboards</div>
                             </div>
                           </button>
                         </div>
@@ -1023,7 +1155,7 @@ export default function PublicEnrollPage() {
                         </select>
                       </div>
 
-                      {/* Music School Name for Certificate (Mandatory unless "No Music School" is clicked) */}
+                      {/* Music School Name for Certificate */}
                       <div className="sm:col-span-2">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
                           <div className="flex items-center gap-2">
@@ -1089,7 +1221,7 @@ export default function PublicEnrollPage() {
                               required={!cand.hasNoSchool}
                               value={cand.schoolName}
                               onChange={e => updateCandidate(index, "schoolName", e.target.value)}
-                              placeholder="e.g. National"
+                              placeholder="e.g. National Academy of Music or Notes n Chords"
                               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
                             />
                           </div>
@@ -1097,7 +1229,7 @@ export default function PublicEnrollPage() {
                         <span className="text-[11px] text-slate-500 mt-1 block">
                           {cand.hasNoSchool
                             ? "Certificate will display student name only without any school or academy."
-                            : 'Exact music school name to be printed on certificate (e.g. "National"). Auto-populates for next candidates.'}
+                            : 'Exact music school name to be printed on certificate (e.g. "National Academy of Music" or "Notes n Chords"). Auto-populates for next candidates.'}
                         </span>
                       </div>
                     </div>
@@ -1115,7 +1247,7 @@ export default function PublicEnrollPage() {
               </button>
             </div>
 
-            {/* Section 2: Contact & Teacher Details (SECOND SECTION - Teacher Name is Mandatory) */}
+            {/* Section 2: Contact Details (Submitter Email, Name, Mobile, Teacher) */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-6 sm:p-8">
               <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                 <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow">
@@ -1163,7 +1295,7 @@ export default function PublicEnrollPage() {
                       required
                       value={submitterName}
                       onChange={e => setSubmitterName(e.target.value)}
-                      placeholder="e.g. Parent, Teacher, or Student Name"
+                      placeholder="e.g. Kevin James or Jiju"
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
                     />
                   </div>
@@ -1212,30 +1344,175 @@ export default function PublicEnrollPage() {
               </div>
             </div>
 
-            {/* Submit Button to Proceed to Next Page (Payment Portal) */}
+            {/* Submit Button to Open Review Pop-up Modal */}
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={submitting}
-                className="w-full bg-slate-900 hover:bg-slate-800 active:scale-[0.99] disabled:opacity-50 text-white font-extrabold text-base sm:text-lg py-4 px-8 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-extrabold text-base sm:text-lg py-4 px-8 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                {submitting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Submitting & Saving to Google Sheets...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Submit & Proceed to Payment Portal ({candidates.length} Student{candidates.length > 1 ? "s" : ""})</span>
-                    <ChevronRight className="w-5 h-5 text-amber-400" />
-                  </>
-                )}
+                <span>Review & Verify Entries ({candidates.length} Student{candidates.length > 1 ? "s" : ""})</span>
+                <ChevronRight className="w-5 h-5 text-amber-400" />
               </button>
               <p className="text-center text-xs text-slate-500 mt-2.5">
-                Submitting records entries directly into the Master Google Sheet and displays the complete Excel summary table and UPI payment portal on the next page.
+                Clicking opens a verification window so you can confirm all student names, grades, and certificate schools before submitting to the payment portal.
               </p>
             </div>
           </form>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* POP-UP VERIFICATION MODAL BEFORE SUBMITTING                   */}
+        {/* ------------------------------------------------------------- */}
+        {showReviewModal && (
+          <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-300 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              {/* Modal Header */}
+              <div className="bg-slate-900 text-white px-6 py-5 flex items-center justify-between border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow">
+                    <Eye className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-white">
+                      Verify Your Enrollment Entries
+                    </h3>
+                    <p className="text-xs text-slate-300">
+                      Please check student names, grades, and certificate schools before final submission
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6">
+                {/* Contact Overview */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Submitter Email</span>
+                    <span className="font-semibold text-slate-900 truncate block mt-0.5" title={submitterEmail}>{submitterEmail}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Submitter Name</span>
+                    <span className="font-semibold text-slate-900 truncate block mt-0.5">{toTitleCase(submitterName)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">WhatsApp Phone</span>
+                    <span className="font-semibold text-slate-900 block mt-0.5">{submitterMobile}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Teacher</span>
+                    <span className="font-semibold text-slate-900 truncate block mt-0.5">{toTitleCase(teacherName)}</span>
+                  </div>
+                </div>
+
+                {/* Candidate Table in Modal */}
+                <div className="border border-slate-300 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-200 font-bold text-xs text-slate-700 flex items-center justify-between">
+                    <span>Candidates List ({candidates.length} Student{candidates.length > 1 ? "s" : ""})</span>
+                    <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      Title Case Auto-Formatted
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto max-h-[360px]">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
+                        <tr>
+                          <th className="py-2.5 px-3 text-center w-10">#</th>
+                          <th className="py-2.5 px-3">Candidate Name</th>
+                          <th className="py-2.5 px-3">DOB</th>
+                          <th className="py-2.5 px-2 text-center">Gender</th>
+                          <th className="py-2.5 px-3">Exam Suite</th>
+                          <th className="py-2.5 px-3">Subject</th>
+                          <th className="py-2.5 px-3">Grade</th>
+                          <th className="py-2.5 px-3">School on Certificate</th>
+                          <th className="py-2.5 px-3 text-right">Fee (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {candidates.map((c, i) => {
+                          const currentFeeItem = GRADES_WITH_FEES.find(g => g.grade.toLowerCase() === c.grade.toLowerCase());
+                          const candFee = currentFeeItem ? currentFeeItem.fee : 6050;
+                          const instName = c.examSuite === "Rock & Pop" && c.instrument.toLowerCase().includes("drum")
+                            ? "Drums"
+                            : (c.examSuite === "Classical & Jazz" && c.instrument.toLowerCase().includes("drum") ? "Drum Kit" : c.instrument);
+
+                          return (
+                            <tr key={c.id || i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
+                              <td className="py-2.5 px-3 text-center font-bold text-slate-500">{i + 1}</td>
+                              <td className="py-2.5 px-3 font-bold text-slate-900">
+                                {toTitleCase(c.firstName)} {toTitleCase(c.lastName)}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-slate-700">{c.dob}</td>
+                              <td className="py-2.5 px-2 text-center font-bold text-slate-700">{c.gender}</td>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">{c.examSuite}</td>
+                              <td className="py-2.5 px-3 font-medium text-slate-800">{instName}</td>
+                              <td className="py-2.5 px-3 font-bold text-slate-900">{c.grade}</td>
+                              <td className="py-2.5 px-3 text-slate-800">
+                                {c.hasNoSchool || !c.schoolName ? (
+                                  <span className="italic text-slate-400">Independent (No School)</span>
+                                ) : (
+                                  <span className="font-semibold text-slate-900">{toSchoolTitleCase(c.schoolName)}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                                ₹{candFee.toLocaleString("en-IN")}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-slate-100 font-bold border-t border-slate-300">
+                        <tr>
+                          <td colSpan={7} className="py-3 px-3 text-right text-slate-700">
+                            Total Payable:
+                          </td>
+                          <td colSpan={2} className="py-3 px-3 text-right text-base text-amber-600 font-mono font-black">
+                            ₹{totalFee.toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(false)}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  ← Edit Details
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSubmit}
+                  disabled={submitting}
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {submitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Confirm & Proceed to Payment Portal (₹{totalFee.toLocaleString("en-IN")})</span>
+                      <ArrowRight className="w-4 h-4 text-amber-400" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

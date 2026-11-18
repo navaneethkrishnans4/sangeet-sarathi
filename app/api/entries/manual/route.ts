@@ -91,8 +91,11 @@ function normalizeInstrument(inst: string, fallbackSuite?: string): { instrument
   if (clean.includes("acoustic guitar") || clean.includes("guitar")) {
     return { instrument: "Acoustic Guitar", examType: isExplicitRP ? "Rock & Pop" : "Classical & Jazz" };
   }
+  if (clean.includes("drum kit") || clean.includes("drumkit")) {
+    return { instrument: "Drum Kit", examType: "Classical & Jazz" };
+  }
   if (clean.includes("drum")) {
-    return { instrument: "Drum Kit", examType: "Rock & Pop" };
+    return { instrument: fallbackSuite === "Classical & Jazz" ? "Drum Kit" : "Drums", examType: fallbackSuite === "Classical & Jazz" ? "Classical & Jazz" : "Rock & Pop" };
   }
   if (clean.includes("vocal") || clean.includes("sing")) {
     return { instrument: "Vocals", examType: "Rock & Pop" };

@@ -32,6 +32,64 @@ export function toTitleCase(str: string): string {
     .join(" ");
 }
 
+export function toSchoolTitleCase(str: string): string {
+  if (!str) return "";
+  const lowerExceptions = new Set(["of", "n", "and", "&", "the", "in", "at", "for", "on", "to", "by"]);
+  const words = str.trim().split(/\s+/);
+  return words
+    .map((word, idx) => {
+      const lower = word.toLowerCase();
+      // Conjunctions/prepositions in middle stay lowercase
+      if (idx > 0 && lowerExceptions.has(lower)) {
+        return lower === "&" ? "&" : lower;
+      }
+      if (word.length === 1) return word.toUpperCase();
+      if (/^[A-Za-z](\.[A-Za-z])*\.?$/.test(word)) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
+export function validateDob(dobStr?: string): { valid: boolean; error?: string; formatted?: string } {
+  if (!dobStr || !dobStr.trim()) {
+    return { valid: false, error: "Date of Birth is required." };
+  }
+  const clean = dobStr.trim().replace(/[-.]/g, "/");
+  const parts = clean.split("/");
+  if (parts.length !== 3) {
+    return { valid: false, error: "Please enter Date of Birth in DD/MM/YYYY format." };
+  }
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const year = parseInt(parts[2], 10);
+
+  const currentYear = new Date().getFullYear();
+
+  if (isNaN(day) || isNaN(month) || isNaN(year)) {
+    return { valid: false, error: "Invalid date numbers in Date of Birth." };
+  }
+  if (year < 1940 || year > currentYear) {
+    return { valid: false, error: `Birth year must be between 1940 and ${currentYear} (entered: ${year}).` };
+  }
+  if (month < 1 || month > 12) {
+    return { valid: false, error: `Invalid birth month: ${month}. Must be 1 to 12.` };
+  }
+  if (day < 1 || day > 31) {
+    return { valid: false, error: `Invalid birth day: ${day}. Must be 1 to 31.` };
+  }
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day > daysInMonth) {
+    return { valid: false, error: `Invalid date: ${day}/${month}/${year} (month ${month} has only ${daysInMonth} days).` };
+  }
+
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  return {
+    valid: true,
+    formatted: `${pad(day)}/${pad(month)}/${year}`
+  };
+}
+
 const DEFAULT_SERVICE_ACCOUNT = {
   client_email: "trinity-sheets-service@trinity-503109.iam.gserviceaccount.com",
   private_key: `-----BEGIN PRIVATE KEY-----
@@ -246,7 +304,13 @@ export async function appendCandidatesToGoogleSheet(
       const cSubFirst = cSubParts[0] || "Teacher";
       const cSubLast = cSubParts.slice(1).join(" ") || "";
       const cSubEmail = c.submitterEmail || submitterEmail || "trinitykochi.ops.office@gmail.com";
-      const cSchool = c.schoolName ? toTitleCase(c.schoolName) : (schoolName ? toTitleCase(schoolName) : "");
+      const cSchool = c.schoolName ? toSchoolTitleCase(c.schoolName) : (schoolName ? toSchoolTitleCase(schoolName) : "");
+
+      // Ensure Classical & Jazz has Drum Kit, and Rock & Pop has Drums
+      let subject = toTitleCase(c.instrument);
+      if (c.instrument.toLowerCase().includes("drum")) {
+        subject = isRP ? "Drums" : "Drum Kit";
+      }
 
       row[1] = toTitleCase(c.firstName); // B: First Name (Proper Casing)
       row[3] = toTitleCase(c.lastName);  // D: Last Name (Proper Casing)
@@ -255,7 +319,7 @@ export async function appendCandidatesToGoogleSheet(
       row[9] = (c.gender || "M").trim().toUpperCase().startsWith("F") ? "F" : "M"; // J: Gender (M / F)
       row[13] = suiteName; // N: Exam Suite
       row[14] = prodName; // O: Product Name
-      row[15] = c.instrument; // P: Subject
+      row[15] = subject; // P: Subject (Drums for R&P, Drum Kit for Classical & Jazz)
       row[17] = "N"; // R: Submitter same as candidate
       row[18] = cSubFirst; // S: Submitter First Name
       row[19] = cSubLast; // T: Submitter Last Name
