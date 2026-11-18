@@ -100,12 +100,11 @@ export default function PublicEnrollPage() {
     }
   ]);
 
-  // Contact & Teacher details (Section 2 - Teacher Name is Mandatory)
-  const [teacherName, setTeacherName] = useState("");
-  const [schoolName, setSchoolName] = useState("");
+  // Contact & Teacher details (Section 2: Email, Submitter Name, Mobile, Teacher)
+  const [submitterEmail, setSubmitterEmail] = useState("");
   const [submitterName, setSubmitterName] = useState("");
   const [submitterMobile, setSubmitterMobile] = useState("");
-  const [submitterEmail, setSubmitterEmail] = useState("");
+  const [teacherName, setTeacherName] = useState("");
 
   // Payment states (Payment Portal)
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
@@ -247,7 +246,7 @@ export default function PublicEnrollPage() {
       return `${i + 1}. ${c.firstName} ${c.lastName} (${c.grade} ${c.instrument} - ${c.examSuite}) [School: ${sch}]`;
     }).join("%0A");
 
-    const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries on the enrollment portal:%0A%0A*Teacher Name:* ${encodeURIComponent(teacherName)}%0A*School/Academy:* ${encodeURIComponent(schoolName || "Independent")}%0A*Submitter:* ${encodeURIComponent(submitterName)}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI Payment")}%0A%0A*Candidates Breakdown:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
+    const msg = `Hello Trinity Exam Centre,%0A%0AI have submitted exam entries on the enrollment portal:%0A%0A*Submitter Email:* ${encodeURIComponent(submitterEmail)}%0A*Submitter:* ${encodeURIComponent(submitterName)}%0A*Phone:* ${encodeURIComponent(submitterMobile)}%0A*Teacher Name:* ${encodeURIComponent(teacherName)}%0A*Total Candidates:* ${candidates.length}%0A*Total Fee:* ₹${totalFee.toLocaleString("en-IN")}%0A*Payment Note/Ref:* ${encodeURIComponent(paymentRef || "UPI Payment")}%0A%0A*Candidates Breakdown:*%0A${candidateSummary}%0A%0AAttaching payment screenshot here for verification.`;
     return `https://wa.me/91${WHATSAPP_NUMBER}?text=${msg}`;
   };
 
@@ -278,9 +277,9 @@ export default function PublicEnrollPage() {
       }
     }
 
-    // Validation: Section 2 Contact & Teacher Details (Teacher Name is Mandatory)
-    if (!teacherName.trim()) {
-      setErrorMsg("Teacher Name is required in Section 2 (Contact Details).");
+    // Validation: Section 2 Contact & Teacher Details (Order: Email, Submitter Name, Mobile, Teacher)
+    if (!submitterEmail.trim() || !submitterEmail.includes("@")) {
+      setErrorMsg("Please enter a valid Submitter Email Address in Section 2 (Contact Details).");
       return;
     }
     if (!submitterName.trim()) {
@@ -291,6 +290,10 @@ export default function PublicEnrollPage() {
       setErrorMsg("WhatsApp / Mobile Number is required in Section 2.");
       return;
     }
+    if (!teacherName.trim()) {
+      setErrorMsg("Teacher Name is required in Section 2 (Contact Details).");
+      return;
+    }
 
     setSubmitting(true);
 
@@ -299,11 +302,10 @@ export default function PublicEnrollPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          teacherName,
-          schoolName,
+          submitterEmail,
           submitterName,
           submitterMobile,
-          submitterEmail,
+          teacherName,
           candidates: candidates.map(c => ({
             firstName: c.firstName,
             lastName: c.lastName,
@@ -552,10 +554,10 @@ export default function PublicEnrollPage() {
             </div>
 
             {/* Submitter & Teacher Summary Info Card */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Teacher</span>
-                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{teacherName}</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Submitter Email</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block truncate" title={submitterEmail}>{submitterEmail}</span>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Submitter / Applicant</span>
@@ -564,6 +566,10 @@ export default function PublicEnrollPage() {
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">WhatsApp / Mobile</span>
                 <span className="text-sm font-bold text-slate-900 mt-0.5 block">{submitterMobile}</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Teacher</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block">{teacherName}</span>
               </div>
             </div>
 
@@ -1117,12 +1123,72 @@ export default function PublicEnrollPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">Contact & Teacher Details</h2>
-                  <p className="text-xs text-slate-500">Teacher and Submitter (Parent / Teacher / Academy) information</p>
+                  <p className="text-xs text-slate-500">Submitter and teacher information for official exam communications</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
-                {/* Teacher Name - MANDATORY */}
+                {/* 1. Submitter Email ID - MANDATORY & FIRST TEXTBOX */}
+                <div className="sm:col-span-2">
+                  <label htmlFor={`${formId}-subEmail`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Submitter Email Address <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      id={`${formId}-subEmail`}
+                      type="email"
+                      required
+                      value={submitterEmail}
+                      onChange={e => setSubmitterEmail(e.target.value)}
+                      placeholder="e.g. zimbelsmusic@gmail.com or name@example.com"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
+                    />
+                  </div>
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    Official appointment slip, timetable, and exam confirmations will be sent to this email
+                  </span>
+                </div>
+
+                {/* 2. Submitter Name - MANDATORY & SECOND TEXTBOX */}
+                <div>
+                  <label htmlFor={`${formId}-subName`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Submitter / Applicant Name <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      id={`${formId}-subName`}
+                      type="text"
+                      required
+                      value={submitterName}
+                      onChange={e => setSubmitterName(e.target.value)}
+                      placeholder="e.g. Parent, Teacher, or Student Name"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Submitter Mobile - MANDATORY & THIRD TEXTBOX */}
+                <div>
+                  <label htmlFor={`${formId}-subPhone`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    WhatsApp / Mobile Number <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      id={`${formId}-subPhone`}
+                      type="tel"
+                      required
+                      value={submitterMobile}
+                      onChange={e => setSubmitterMobile(e.target.value)}
+                      placeholder="e.g. 9847240369"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Teacher Name - MANDATORY & FOURTH TEXTBOX */}
                 <div className="sm:col-span-2">
                   <label htmlFor={`${formId}-teacherName`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                     Teacher Name <span className="text-rose-500">*</span>
@@ -1142,80 +1208,6 @@ export default function PublicEnrollPage() {
                   <span className="text-[11px] text-slate-500 mt-1 block">
                     Required for official Trinity College London records
                   </span>
-                </div>
-
-                {/* Submitter Name */}
-                <div>
-                  <label htmlFor={`${formId}-subName`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    Submitter / Applicant Name <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      id={`${formId}-subName`}
-                      type="text"
-                      required
-                      value={submitterName}
-                      onChange={e => setSubmitterName(e.target.value)}
-                      placeholder="e.g. Parent, Teacher, or Student Name"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Submitter Mobile */}
-                <div>
-                  <label htmlFor={`${formId}-subPhone`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    WhatsApp / Mobile Number <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      id={`${formId}-subPhone`}
-                      type="tel"
-                      required
-                      value={submitterMobile}
-                      onChange={e => setSubmitterMobile(e.target.value)}
-                      placeholder="e.g. 9847240369"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Submitter Email */}
-                <div>
-                  <label htmlFor={`${formId}-subEmail`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    Email Address <span className="text-slate-400 font-normal">(Optional - for exam confirmations)</span>
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      id={`${formId}-subEmail`}
-                      type="email"
-                      value={submitterEmail}
-                      onChange={e => setSubmitterEmail(e.target.value)}
-                      placeholder="e.g. zimbelsmusic@gmail.com"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Music School / Academy */}
-                <div>
-                  <label htmlFor={`${formId}-school`} className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    General Music School / Academy <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <div className="relative">
-                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      id={`${formId}-school`}
-                      type="text"
-                      value={schoolName}
-                      onChange={e => setSchoolName(e.target.value)}
-                      placeholder="e.g. National"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-sm transition-all"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
